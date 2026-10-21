@@ -20,9 +20,9 @@ if a feature would work the same without Qloo, we are building the wrong thing.
 Qloo Agentic Hackathon ("Agents, but with taste"). Deadline **30 Oct 2026, 11:45 PM ET**. We submit
 by **30 Oct, 6:00 PM ET**.
 
-Stack: Python 3.11+ · FastAPI · async `httpx` · Qloo API · one small and one large LLM (provider is
-an open question in [PRD.md](PRD.md) §15) · Redis (Upstash) behind `Cache` · Supabase Postgres ·
-Next.js on Vercel · Cloud Run.
+Stack: Python 3.11+ · FastAPI · async `httpx` · Qloo API · Claude Haiku 5.5 (planner) and
+Claude Opus 5.5 (writer), via the `anthropic` SDK · Redis (Upstash) behind `Cache` · Supabase
+Postgres · Next.js on Vercel · Cloud Run.
 
 ## Canonical external references — check these, don't trust our summaries
 
@@ -180,7 +180,8 @@ you deleted.
 
 - Type hints everywhere; dataclasses or Pydantic models for records
 - No code comments; explanations go in docs, PR bodies or chat
-- Temperature 0 for planning and extraction; sampling only for pitch wording
+- No sampling parameters: Claude Opus 5.5 and Haiku 5.5 reject `temperature`. Determinism comes
+  from structured outputs, code-only scoring and caching by `PROMPT_VERSION`
 - Structured output for every model call
 - Plan all Qloo calls up front, then run independent ones in parallel
 - Every Insights call sets `feature.explainability=true`

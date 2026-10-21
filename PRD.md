@@ -203,11 +203,28 @@ mode end to end by 25 Oct, supervisor mode and eval by 28 Oct, submitted by 30 O
 
 | # | Question | Owner | Blocks |
 |---|---|---|---|
-| Q-1 | Which LLM provider for the planner and writer? | Vedant | WU-02, WU-06 |
-| Q-2 | Do emerging artists we want to demo exist in Qloo with useful data? | Prachit | Demo choice |
-| Q-3 | Exact paths and parameters for Compare and Trending | Vedant | WU-01 |
 | Q-4 | Where do we get ~300 known placements, and are we allowed to use that source? | Swara | WU-11 |
-| Q-5 | What popularity cap counts as "emerging"? | Vedant | FR-8 |
+| Q-6 | Trending is per entity, not a list (see [DESIGN.md](DESIGN.md) §3). Do we change the `trending` signature in §7.1? | all three | WU-01, WU-04 |
+
+### Answered — 21 Oct 2026, from live API calls
+
+**Q-1 — LLM provider: Anthropic Claude.** Planner: Claude Haiku 5.5 (`claude-haiku-5-5`), effort
+`low`. Writer: Claude Opus 5.5 (`claude-opus-5-5`). The eval's LLM-alone and LLM-with-web-search
+baselines use Claude Opus 5.5 too, so the comparison is fair. These models reject `temperature`,
+so determinism comes from structured outputs, code-only scoring and caching by `PROMPT_VERSION`.
+Forced `tool_choice` is also rejected; use structured outputs for the planner's call list.
+
+**Q-2 — data for emerging artists: yes, for most.** Indian indie artists resolve, including very
+small ones (Dhruv Visvanath, popularity 0.06), and still return specific, sensible TV matches.
+Prateek Kuhad's top TV match is *Bandish Bandits*, a series about musicians. Some artists are
+missing (Aditi Ramesh, Ramya Pothuri); for those, search returns a wrong near-match, which
+`find_entity` must reject. Demo picks still to be chosen from artists that resolve.
+
+**Q-3 — paths and parameters: settled.** All paths are in [DESIGN.md](DESIGN.md) §3. Compare is
+`/v2/analysis/compare`; Trending is `/v2/trending` and needs a signal entity and a date window.
+
+**Q-5 — "emerging" cap: start at 0.80, tune on the dev split.** Observed popularity: small indie
+artists 0.06–0.70, Prateek Kuhad 0.86, international stars 0.97 and above.
 
 ## 16. Risks
 

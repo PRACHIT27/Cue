@@ -80,41 +80,80 @@ sequenceDiagram
 with a 401. Key goes in the `X-Api-Key` header. Insights is a GET with parameters in the query
 string.
 
-**Entity types for `filter.type`:** artist, book, brand, destination, movie, person, place, podcast,
-tv_show, video_game (as `urn:entity:<type>`). Music is `urn:entity:artist`.
+**Entity types for `filter.type`:** artist, book, brand, locality, movie, person, place, podcast,
+tv_show, videogame (as `urn:entity:<type>`). Music is `urn:entity:artist`. Games are
+`urn:entity:videogame`; `urn:entity:video_game` returns a 400. The hackathon guide also lists
+`destination`; it is untested, and the API reference uses `locality`.
 
-**Endpoints we use:**
+Special `filter.type` values on `/v2/insights`: `urn:demographics` (age and gender lean),
+`urn:heatmap` (where an audience clusters) and `urn:tag` (taste tags for an audience).
+
+**Endpoints we use** (all checked against the live API on 21 Oct 2026):
 
 | Endpoint | Our tool | Used for |
 |---|---|---|
 | `/search` | `find_entity` | Name to Qloo ID; grounding guard; made-up-name check in eval |
-| Entities by ID | `get_entities` | Details for the report; ID check in the guard |
-| `/v2/tags` | `find_tags` | Words like "dream pop" to tag IDs |
-| Tag types | `get_tag_types` | Grouping the taste profile |
-| `/v2/audiences` | `find_audiences` | Audience groups for the profile and as signals |
+| `/entities?entity_ids=` | `get_entities` | Details for the report; ID check in the guard |
+| `/v2/tags?filter.query=` | `find_tags` | Words like "dream pop" to tag IDs |
+| `/v2/tags/types` | `get_tag_types` | Grouping the taste profile |
+| `/v2/audiences?filter.query=` | `find_audiences` | Audience groups for the profile and as signals |
 | `/v2/audiences/types` | `get_audience_types` | Listing audience kinds |
-| `/v2/insights` | `insights` | Profiles, matches, heatmap |
-| Compare | `compare` | Artist vs production fit |
-| Trending | `trending` | Rising productions and artists |
+| `/v2/insights` | `insights` | Profiles, matches, demographics, heatmap |
+| `/v2/analysis/compare` | `compare` | Artist vs production fit |
+| `/v2/trending` | `trending` | Whether a candidate is rising |
 
-Paths marked by name only must be checked against the live reference (WU-01, PRD Q-3). Don't use
-`/recommendations` or `/recs`; they are legacy and unsupported.
+Don't use `/recommendations` or `/recs`; they are legacy and unsupported.
 
 **Parameters we lean on:**
 
 - Signals: `signal.interests.entities`, `signal.interests.tags`, `signal.demographics.age`,
   `signal.demographics.gender`, `signal.demographics.audiences`, `bias.trends`
 - Filters: `filter.type`, `filter.popularity.max`, `filter.results.entities`,
-  `filter.exclude.entities`, `filter.tags`, `filter.release_year.min`
+  `filter.exclude.entities`, `filter.tags`, `filter.release_year.min` (movies),
+  `filter.latest_known_year.min` (TV, keeps results to shows still running)
 - Output: `feature.explainability`, `take` (max 50), `page`, `sort_by`, `diversify.by`,
   `output.heatmap.boundary`
 
 **Quirk that shapes the design:** invalid parameters for a `filter.type` are silently ignored.
 A request can look fine and return the wrong thing. That is why the param checker exists (§4).
 
+### What the live API actually returns
+
+Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against the doc prose.
+
+- **Entity shape.** `types` is a list (read `types[0]`). `popularity` is top level, 0–1. On
+  Insights results, `affinity` is at `query.affinity` and the explanation at
+  `query.explainability`.
+- **Explainability.** `query.explainability["signal.interests.entities"]` is a list of
+  `{entity_id, score}`, one per input entity. With three sounds-like artists as the signal, each
+  gets its own share, so every match can say which input drove it.
+- **Extra artist data.** `properties.external` carries `lastfm.listeners` and `lastfm.scrobbles`
+  (real fan counts), plus Spotify, MusicBrainz and Wikidata IDs. Artist tags include audience
+  traits such as `urn:tag:audience:qloo:loyal` and `:passionate`.
+- **Search returns wrong top hits.** When the exact name isn't in Qloo, `/search` still returns
+  its nearest fuzzy match first ("Aditi Ramesh" → "Ramesh"). `find_entity` must check the name
+  matches and return not found otherwise, never take the first hit blindly.
+- **Games skew to blockbusters.** Without a cap, game affinities return the most popular titles
+  for almost any artist. Use `filter.popularity.max` (about 0.9) for games.
+- **Duplicate titles.** The same title can appear twice with different entity IDs (seasons or
+  versions). De-duplicate by normalised title and keep every ID for the grounding guard.
+- **Compare** takes `a.signal.interests.entities` and `b.signal.interests.entities` and returns
+  the shared tags, each with `query.score` (0–1). There is no single overlap number; WU-01 decides
+  how to turn the tag scores into `overlap` and logs it here.
+- **Trending is per entity, not a list.** `/v2/trending` requires `signal.interests.entities`,
+  `filter.start_date` and `filter.end_date`, and returns a weekly series for that entity
+  (`population_percentile`, `population_rank`, `population_rank_velocity`,
+  `velocity_fold_change`). **The hackathon data ends around 30 Jul 2026**, so a window ending after
+  that comes back empty. Query the 12 weeks up to the latest available week. This doesn't match
+  the `trending(entity_type, take)` signature in §7.1; see VERSION.md.
+- **Demographics** returns `results.demographics[0].query.age` (six buckets, `24_and_younger` to
+  `55_and_older`) and `.gender` (`male`, `female`), each from −1 to 1.
+- **Heatmap** returns `results.heatmap[]`, each with `location` (lat, lon, geohash) and `query`
+  (`affinity`, `affinity_rank`, `popularity`).
+
 ## 4. Harness
 
-- **Planner** (small model, temperature 0, structured output): reads the input and returns the
+- **Planner** (Claude Haiku 5.5, effort `low`, structured output): reads the input and returns the
   full list of Qloo calls for the run, with dependencies. Doing this once lets independent calls run
   at the same time.
 - **Param checker** (`cue/qloo/params.py`): a table of which parameters each `filter.type` accepts,
@@ -124,7 +163,7 @@ A request can look fine and return the wrong thing. That is why the param checke
   parallel. Per-call timeout 10 s. Max 40 Qloo calls per run.
 - **Scorer:** see §6.
 - **Grounding guard:** see §5.
-- **Writer** (large model, structured output): turns scored, grounded matches into a pitch kit or
+- **Writer** (Claude Opus 5.5, structured output): turns scored, grounded matches into a pitch kit or
   brief. Gets only our checked data, never raw text from elsewhere.
 - **Run events:** every step and Qloo call emits an event (§7.3), streamed to the website over
   server-sent events and stored with the run.
