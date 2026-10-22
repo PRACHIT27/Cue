@@ -47,7 +47,7 @@ goes through one client, and only a cache miss reaches the API.
 | 3 Match | Insights for TV, movies, games, podcasts, brands, in parallel | Insights for artists with `filter.popularity.max` | Insights |
 | 4 Check | Compare artist vs each top production; trending shows | Compare production vs each top artist; trending artists | Compare, Trending |
 | 5 Score and write | Fit score in code; pitch kit per production | Same fit score; shortlist brief | — |
-| Extra | Where fans cluster, for local ad and radio pitches | Where the show's audience clusters | Insights (heatmap) |
+| Extra | Which neighbourhoods of a chosen city the fans cluster in, for gigs and local ads | Same, for the show's audience | Insights (heatmap) |
 
 ### 2.1 Artist onboarding
 
@@ -224,8 +224,12 @@ Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against t
 - **Demographics** returns `results.demographics[0].query.age` (six buckets, `24_and_younger` to
   `55_and_older`) and `.gender` (`male`, `female`), each from −1 to 1.
 - **Heatmap** returns `results.heatmap[]`, each with `location` (lat, lon, geohash) and `query`
-  (`affinity`, `affinity_rank`, `popularity`). `output.heatmap.boundary` must be `urn:geohash`
-  (the default) or `urn:entity:locality`; `city` returns a 400.
+  (`affinity`, `affinity_rank`, `popularity`). It **needs an area**: without `filter.location` or
+  `filter.location.query` it returns a 400. Only the default `urn:geohash` boundary returned data:
+  `urn:entity:locality` gave 0 results for both India and Mumbai, and `city` is a 400. Inside
+  Mumbai, Prateek Kuhad's heatmap returned 2,951 squares of a few city blocks each, with the top
+  ones tied at 0.997 affinity. So it maps neighbourhoods within one city (Worli, Lower Parel,
+  Bandra); it can't rank cities without one call per city.
 - **Explainability with one input is trivial.** With a single signal entity it only says "100%
   from this entity". It becomes useful with several inputs, as in Route 3.
 

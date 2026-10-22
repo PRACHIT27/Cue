@@ -17,6 +17,15 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.2.1 — 22 Oct 2026 — Prachit
+
+PATCH: heatmap corrected from a live retry. It needs an area (`filter.location.query`), and only
+the default geohash boundary returns data; `urn:entity:locality` gave nothing. It maps
+neighbourhoods within one city, not cities. DESIGN.md §2 Extra row, §3 and the WU-15 prompt
+updated. Pushed straight to `main`.
+Action required: Prachit, the `params.py` boundary check should allow `urn:geohash` only for now,
+and require `filter.location` or `filter.location.query` for `urn:heatmap`.
+
 ## v1.2.0 — 22 Oct 2026 — Prachit
 
 MINOR: onboarding becomes three routes, plus more live findings. Pushed straight to `main` at

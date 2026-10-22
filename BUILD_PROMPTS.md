@@ -240,7 +240,9 @@ COMPETITION.md §3 checklist. Submit by 30 Oct, 6 PM ET.
 ## WU-15 · Heatmap extra · Vedant
 
 ```
-Read DESIGN.md §2 (Extra row). Add an optional step: Insights heatmap with
-output.heatmap.boundary=urn:entity:locality (not "city", which returns a 400) for the artist's fans, shown as "your fans cluster in…" with local ad
-and radio pitch ideas. Off by default if it slows the main run.
+Read DESIGN.md §2 (Extra row) and the Heatmap note in §3. Add an optional step: Insights heatmap
+for the artist's fans inside one city the artist picks (filter.location.query, required), with the
+default geohash boundary (urn:entity:locality returned nothing, "city" is a 400). Group the squares
+into neighbourhoods and show "your fans cluster in…" with gig and local ad ideas. Off by default if
+it slows the main run.
 ```
