@@ -173,7 +173,8 @@ artist is above the cap.
 ```
 Read CLAUDE.md and PRD §6. Build web/ in Next.js: a home page with the two modes, an input form per
 mode (artist name plus optional three sounds-like artists; or a production), a results view with
-ranked cards (name, type, fit score, Qloo's reason, pitch email with a copy button), and an about
+ranked cards (name, type, fit score, Qloo's reason, pitch email with a copy button, and any trend
+labelled "as of July 2026", never as current), and an about
 section explaining how Qloo is used. Opens with a pre-warmed example so the first view shows real
 output. Works at phone width.
 ```

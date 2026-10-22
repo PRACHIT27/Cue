@@ -106,8 +106,9 @@ result carries Qloo's explanation.
 
 For the top candidates, run Compare (artist vs production) and Trending (is the production rising).
 
-*Acceptance:* every ranked production has a compare result and a trending flag, or is marked
-`insufficient_data`.
+*Acceptance:* every ranked production has a compare result and a trend value with its as-of date,
+or is marked `insufficient_data`. Wherever trend is shown, it is labelled "as of July 2026" (the
+latest week in Qloo's hackathon data), never as current.
 
 ### FR-5 Fit score (US-2, US-4)
 
@@ -204,7 +205,14 @@ mode end to end by 25 Oct, supervisor mode and eval by 28 Oct, submitted by 30 O
 | # | Question | Owner | Blocks |
 |---|---|---|---|
 | Q-4 | Where do we get ~300 known placements, and are we allowed to use that source? | Swara | WU-11 |
-| Q-6 | Trending is per entity, not a list (see [DESIGN.md](DESIGN.md) §3). Do we change the `trending` signature in §7.1? | all three | WU-01, WU-04 |
+
+### Answered — 22 Oct 2026, agreed by the team
+
+**Q-6 — trending signature: changed.** `trending(entity_id, entity_type)` returns that entity's
+latest 12 weeks as a `TrendSeries` with an `as_of` date ([DESIGN.md](DESIGN.md) §7). Because the
+data ends about 30 Jul 2026, trend is always labelled "as of July 2026".
+
+**Q-5 — "emerging" cap: 0.80 confirmed** as the starting value, still tuned on the dev split only.
 
 ### Answered — 21 Oct 2026, from live API calls
 

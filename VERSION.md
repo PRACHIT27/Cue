@@ -17,6 +17,23 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.0.0 — 22 Oct 2026 — Prachit
+
+MAJOR: contract change agreed by all three (PRD Q-6), plus Q-5 confirmed.
+- DESIGN.md §7.1: `trending(entity_type, take) -> list[TrendingItem]` is now
+  `trending(entity_id, entity_type) -> TrendSeries`, returning that entity's latest 12 weeks.
+- DESIGN.md §7.2: new `TrendSeries` (entity_id, as_of, weeks) and `TrendWeek` (week_start,
+  percentile, rank, rank_velocity, velocity_fold_change). `Match` gains `trend_as_of`.
+- DESIGN.md §6: `trend` comes from the candidate's latest week, scaled to 0–1 (0 if no data).
+- Trend is labelled "as of July 2026" everywhere it's shown (PRD FR-4, DESIGN §6, WU-09, README),
+  because Qloo's hackathon data ends about 30 Jul 2026.
+- Emerging cap stays at 0.80, tuned on the dev split only.
+
+Action required:
+- Vedant: build `trending` in WU-01 to the new signature, and log in VERSION.md which weekly field
+  and scaling feed `trend`.
+- Prachit: show the "as of July 2026" label wherever trend appears in `web/`.
+
 ## v0.2.0 — 22 Oct 2026 — Vedant
 
 Checked every Qloo endpoint against the live API and settled PRD Q-1, Q-2, Q-3 and Q-5.
