@@ -53,28 +53,34 @@ goes through one client, and only a cache miss reaches the API.
 
 ```mermaid
 flowchart TB
-    S[Spotify link?] -->|yes| L["/entities?external.spotify.ids="]
-    L -->|one artist| C[Is this you? card]
-    L -->|not found| N
-    S -->|no| N["/search, types=urn:entity:artist"]
-    N -->|no exact-name match| P2[Path 2: taste stand-in]
-    N -->|one exact match| C
-    N -->|two or more| D{Same Spotify or<br/>MusicBrainz ID?}
-    D -->|yes| M[Merge, use every ID] --> C
-    D -->|no| F[Narrow by genre and country]
-    F -->|one left| C
-    F -->|several| K[Pick from up to 3 cards]
-    K -->|none of these is me| P2
-    K --> C
+    S[Spotify link + role] --> R1["Route 1: Qloo /entities?external.spotify.ids="]
+    R1 -->|found| G
+    R1 -->|not found| MB["MusicBrainz: Spotify link to MBID<br/>(direct lookup, else name search + Spotify check)"]
+    MB -->|MBID| R2["Route 2: Qloo /entities?external.musicbrainz.ids="]
+    MB -->|no MBID| R3
+    R2 -->|found| G
+    R2 -->|not found| R3[Route 3: taste stand-in]
+    G["MBID lookup in Qloo: every entry<br/>for this person (artist, person, author)"] --> C[Is this you? card<br/>artist entry is the signal]
+    NS[No Spotify link] --> N["/search by role type, exact name only"]
+    N -->|one or several| K[Narrow by genre and country,<br/>pick from up to 3 cards]
+    N -->|none| R3
+    K -->|none of these is me| R3
+    K --> G
     C -->|confirmed| V[(Save user to entity IDs)]
-    P2 --> Q[Agent resolves sounds-like artists,<br/>song artists and genre tags in Qloo]
+    R3 --> Q[Agent resolves sounds-like artists,<br/>song artists and genre tags in Qloo]
     Q --> E[Show the stand-in, user edits and confirms]
     E --> V
 ```
 
 - **Exact name match** means the normalised name equals the query (case, accents and spacing
   ignored). Search's first hit is never taken on its own.
-- **Path 2 signals:** sounds-like and song artists go in `signal.interests.entities`, genre tags in
+- **Search type by role:** singers, bands, composers and producers search `urn:entity:artist`;
+  lyricists search `urn:entity:person`, then `urn:entity:author`.
+- **MusicBrainz** is used only to turn a Spotify link into an MBID. It lives in its own small
+  helper outside the Qloo client (`cue/identity/musicbrainz.py`), allows about 1 request per
+  second, needs a descriptive `User-Agent`, and its results are cached like name lookups. Taste
+  data always comes from Qloo.
+- **Route 3 signals:** sounds-like and song artists go in `signal.interests.entities`, genre tags in
   `signal.interests.tags`. Explainability then says which input drove each match.
 - **Saved link:** the confirmed user-to-entity mapping lives in Supabase. It holds Qloo IDs we chose,
   not Qloo response data.
@@ -169,7 +175,19 @@ Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against t
   Both share one MusicBrainz ID. Signalling with the person entry gives different matches and an
   empty demographics result. Always pass `types=urn:entity:artist` to `/search` for artists.
 - **Spotify lookup is exact.** `/entities?external.spotify.ids=<id>` returned the single artist
-  entry. This is the first step of onboarding (§2.1).
+  entry. This is Route 1 of onboarding (§2.1).
+- **MBID lookup returns every entry for one person.** `/entities?external.musicbrainz.ids=<mbid>`
+  returned Prateek Kuhad's artist and person entries together. This is how we merge duplicates.
+- **Lyricists are usually person entries only.** Amitabh Bhattacharya, Swanand Kirkire and Irshad
+  Kamil have `urn:entity:person` (sometimes `author`) entries with no Spotify ID, but their entries
+  carry the MBID, so Route 2 finds all three. Composers who release music (Amit Trivedi, Vishal
+  Bhardwaj, Gulzar) have artist entries with Spotify IDs. Person-entry signals gave weaker results
+  for Prateek, so test a lyricist end to end before demoing one.
+- **Names collide.** A name search for "Divine" matched an artist whose top TV shows were all
+  British crime dramas, not the Mumbai rapper. Name-only onboarding needs the confirm card.
+- **No music credits on shows.** TV and film entries carry genres, cast-free descriptions, tags
+  and review links, but no composer, music director or lyricist. Qloo can't tell us who made a
+  show's music.
 - **Games skew to blockbusters.** Without a cap, game affinities return the most popular titles
   for almost any artist. Use `filter.popularity.max` (about 0.9) for games.
 - **Duplicate titles.** The same title can appear twice with different entity IDs (seasons or
@@ -178,18 +196,38 @@ Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against t
   `results.tags` (shared tags, each with `query.score`), plus `results.a` and `results.b` (each
   side's own tags). **Between an artist and a TV show, the shared list came back empty**: music tags
   and TV tags rarely overlap. See PRD Q-7.
+- **Compare works between artists, but doesn't separate shows.** Prateek Kuhad vs other artists
+  shared 40+ tags. But each show's favourite artists were the same famous names, so "does his sound
+  match the show's favourite artists?" scored 0.63–0.65 for every show we tried, even with
+  `filter.popularity.max` 0.85 on the show's artists. Keep artist-vs-artist Compare for checking
+  sounds-like artists in Route 3.
 - **Affinity barely varies.** For Prateek Kuhad, the top five TV shows scored 0.945–0.956. Rank
   order carries more information than the raw number. See PRD Q-7.
+- **Popular shows top everyone's list.** *Aarya* and *Criminal Justice* are in the top TV matches
+  for Prateek Kuhad, Anuv Jain, Ritviz and Arijit Singh alike. Raw Insights results reflect what
+  Indian streaming audiences watch, not what one artist's fans specifically watch. See PRD Q-7.
+- **Reverse affinity works.** Insights with the show as the signal and
+  `filter.results.entities=<artist>` gives "how much do this show's fans like this artist": 0.909
+  to 0.918 for Prateek Kuhad across three shows. One call per show.
+- **Fan taste tags are noisy.** `filter.type=urn:tag` with an artist as the signal returned place
+  and brand tags first (VISA, Mocktails, Five Star, Expensive). Use the artist entry's own `tags`
+  (43 clean music, mood, theme and audience tags for Prateek Kuhad), or restrict tag types.
 - **Trending is per entity, not a list.** `/v2/trending` requires `signal.interests.entities`,
   `filter.start_date` and `filter.end_date`, and returns a weekly series for that entity
   (`population_percentile`, `population_rank`, `population_rank_velocity`,
   `velocity_fold_change`). **The hackathon data ends around 30 Jul 2026**, so a window ending after
   that comes back empty. Query the 12 weeks up to the latest available week. The `trending` tool
-  in §7.1 takes one entity and returns this series with its as-of date.
+  in §7.1 takes one entity and returns this series with its as-of date. **For an artist it came
+  back empty** (Prateek Kuhad, May to July 2026) while a TV show returned 13 weeks. Until we find
+  artist data, `trend` may only be available for productions. Check the week order too: the newest
+  week may come first.
 - **Demographics** returns `results.demographics[0].query.age` (six buckets, `24_and_younger` to
   `55_and_older`) and `.gender` (`male`, `female`), each from −1 to 1.
 - **Heatmap** returns `results.heatmap[]`, each with `location` (lat, lon, geohash) and `query`
-  (`affinity`, `affinity_rank`, `popularity`).
+  (`affinity`, `affinity_rank`, `popularity`). `output.heatmap.boundary` must be `urn:geohash`
+  (the default) or `urn:entity:locality`; `city` returns a 400.
+- **Explainability with one input is trivial.** With a single signal entity it only says "100%
+  from this entity". It becomes useful with several inputs, as in Route 3.
 
 ## 4. Harness
 
@@ -261,10 +299,21 @@ fit = 0.50 * affinity + 0.30 * overlap + 0.10 * audience + 0.10 * trend
 
 - **Known problem (PRD Q-7):** live calls show `overlap` is usually empty for artist vs production,
   and `affinity` is nearly flat. Under the rule below, most matches would become
-  `insufficient_data`. Options for WU-04: compare the two *audiences'* taste tags (Insights
-  `urn:tag` with each side as the signal) instead of the entities' own tags; use rank position
-  instead of raw affinity; give `audience` more weight now that demographics works for artist
-  entries. Decide before WU-04 and log it in VERSION.md
+  `insufficient_data`. On top of that, the same popular shows top every Indian artist's list (§3).
+  Options for WU-04, strongest first:
+  - **Lift over a comparison group:** run the same Insights query for a few similar artists and
+    score each production by how much more *this* artist's fans like it than the group's fans do.
+    Pushes everyone's shows (*Aarya*) down and this artist's own (*Kohrra*, *Rocket Boys*) up, and
+    spreads the scores apart. Pitch line: "your fans over-index on *Kohrra* compared with similar
+    artists". Costs a few cached calls per run
+  - **Reverse affinity** in place of `overlap`: how much the production's fans like this artist
+    (`filter.results.entities`, one call per production)
+  - **Rank position** in place of raw affinity
+  - **`filter.popularity.max` on productions**, as for games, to surface smaller, more realistic
+    placements
+  - **More weight on `audience`**, now that demographics works for artist entries
+
+  Decide before WU-04 and log it in VERSION.md
 - Missing `affinity` or `overlap` gives `insufficient_data`, not a number
 - Weights are a starting point, tuned only on the eval's dev split, never on the test split
 - Which Qloo response fields feed each input is settled in WU-01 and logged in VERSION.md

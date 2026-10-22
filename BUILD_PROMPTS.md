@@ -241,6 +241,6 @@ COMPETITION.md §3 checklist. Submit by 30 Oct, 6 PM ET.
 
 ```
 Read DESIGN.md §2 (Extra row). Add an optional step: Insights heatmap with
-output.heatmap.boundary=city for the artist's fans, shown as "your fans cluster in…" with local ad
+output.heatmap.boundary=urn:entity:locality (not "city", which returns a 400) for the artist's fans, shown as "your fans cluster in…" with local ad
 and radio pitch ideas. Off by default if it slows the main run.
 ```

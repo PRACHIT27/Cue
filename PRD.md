@@ -80,18 +80,23 @@ story.
 
 ### FR-1 Artist onboarding (US-1)
 
-Onboarding links the artist to the Qloo entities that stand for them. It always tries the most
-exact route first. Flow and rules are in [DESIGN.md](DESIGN.md) §2.1.
+Onboarding links the artist (singer, band, composer, producer or lyricist) to the Qloo entities
+that stand for them. We ask for their **Spotify artist link** and their **role**, then try three
+routes in order; each runs only if the one before it found nothing. Flow and rules are in
+[DESIGN.md](DESIGN.md) §2.1.
 
-**Step 0 — Spotify link (asked first, optional).** Look the Spotify artist ID up with
-`/entities?external.spotify.ids=`. One result is an exact match.
+**Route 1 — Qloo knows the Spotify ID (happy path).** `/entities?external.spotify.ids=` returns
+their entry. Typical for singers, bands and composers who release music. If it returns more than
+one entry, prefer the `urn:entity:artist` one.
 
-**Path 1 — Qloo knows the artist.** From the Spotify match, or from a name search limited to
-`urn:entity:artist` that returns exactly one exact-name match. Show an "Is this you?" card (name,
-image, short description, listener count). On confirm, save the user-to-entity link so they are
-never asked again.
+**Route 2 — Qloo doesn't know the Spotify ID, but knows the person.** Turn the Spotify ID into a
+MusicBrainz ID (MBID) through MusicBrainz, then look the MBID up in Qloo with
+`/entities?external.musicbrainz.ids=`. Typical for lyricists, whom Qloo often stores only as
+`urn:entity:person` with no Spotify ID. MusicBrainz's direct Spotify-link lookup missed 2 of 3
+lyricists we tested, so the backup is: search MusicBrainz by name and keep only the result whose
+Spotify link matches theirs.
 
-**Path 2 — Qloo doesn't know the artist.** Build a taste stand-in from a short profile:
+**Route 3 — Qloo doesn't know them at all.** Build a taste stand-in from a short profile:
 
 | Question | Used for |
 |---|---|
@@ -106,21 +111,31 @@ The agent turns the answers into Qloo artist IDs and tag IDs. Any suggestion tha
 to an exact Qloo match is dropped. The artist sees the stand-in ("we'll match you as a mix of A, B
 and C, plus these tags") and can edit it before the run.
 
-**Path 3 — more than one match for the name.** If the entries share a Spotify or MusicBrainz ID,
-they are the same artist: merge them and use every ID as a signal. Otherwise narrow by the genre and
-country the artist gave; if more than one is left, show up to three cards to pick from, plus "None
-of these is me", which goes to Path 2. Save the choice.
+**Same person, several entries.** One human can have an artist, a person and an author entry
+(Prateek Kuhad has artist + person; Vishal Bhardwaj has all three). Whichever route found them,
+look their MBID up in Qloo: it returns every entry for that person. Show one card. The artist entry
+is the main signal; the others count as theirs for the grounding guard.
+
+**No Spotify link.** Search by name with an exact-name match (singers, bands, composers:
+`urn:entity:artist`; lyricists: `urn:entity:person`, then `urn:entity:author`), narrow by the genre
+and country they gave, and show up to three cards plus "None of these is me", which goes to Route
+3. Names collide: "Divine" matched a different artist than the Mumbai rapper, which is why the
+Spotify link comes first.
+
+Whichever route succeeds, show an "Is this you?" card (name, image, short description, listener
+count), and on confirm save the user-to-entity link so they are never asked again. The trace panel
+shows which route was used.
 
 *Acceptance:*
-- A Spotify link Qloo knows resolves to one artist entity with no other questions
-- Name search only ever returns `urn:entity:artist` entries; a fuzzy near-match ("Aditi Ramesh" →
-  "Ramesh") is never accepted
-- Two entries sharing a Spotify or MusicBrainz ID show as one card
+- A Spotify link Qloo knows resolves in Route 1 with no other questions
+- A lyricist whose Qloo entry has no Spotify ID resolves in Route 2 through their MBID
+- Entries sharing an MBID show as one card, with the artist entry as the signal
+- A name search never accepts a fuzzy near-match ("Aditi Ramesh" → "Ramesh")
 - An unknown artist with at least one resolvable sounds-like artist gets a fan profile; with none,
   `insufficient_data`
-- Every artist the agent suggests in Path 2 is a real Qloo entity, and the user saw and confirmed
+- Every artist the agent suggests in Route 3 is a real Qloo entity, and the user saw and confirmed
   the stand-in
-- Output from a Path 2 run says matches are based on artists the user resembles
+- Output from a Route 3 run says matches are based on artists the user resembles
 - A confirmed choice is reused on the next visit without asking again
 
 ### FR-2 Fan profile (US-1)
@@ -242,8 +257,9 @@ mode end to end by 25 Oct, supervisor mode and eval by 28 Oct, submitted by 30 O
 | # | Question | Owner | Blocks |
 |---|---|---|---|
 | Q-4 | Where do we get ~300 known placements, and are we allowed to use that source? | Swara | WU-11 |
-| Q-7 | The fit formula's two biggest inputs are weak: Insights affinity barely varies (top TV results all 0.945–0.956), and Compare finds no shared tags between an artist and a show. What replaces `overlap`, and how much weight should affinity keep? See [DESIGN.md](DESIGN.md) §6 | Vedant | WU-04 |
-| Q-8 | Onboarding needs a lookup by Spotify ID. Add `find_by_spotify(spotify_id) -> list[EntityRef]` to the contract (§7.1)? | all three | WU-01, FR-1 |
+| Q-7 | The fit formula's two biggest inputs are weak: Insights affinity barely varies (top TV results all 0.945–0.956), Compare finds no shared tags between an artist and a show, and the same popular shows (*Aarya*, *Criminal Justice*) top every Indian artist's list. Lift over a comparison group of similar artists is the leading option. See [DESIGN.md](DESIGN.md) §6 | Vedant | WU-04 |
+| Q-8 | Onboarding needs lookups by external ID. Add `find_by_spotify(spotify_id)` and `find_by_musicbrainz(mbid)`, both `-> list[EntityRef]`, to the contract (§7.1)? | all three | WU-01, FR-1 |
+| Q-9 | Is there trending data for artists at all? Prateek Kuhad's came back empty while a TV show's didn't | Vedant | WU-04 |
 
 ### Answered — 22 Oct 2026, agreed by the team
 

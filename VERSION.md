@@ -17,6 +17,32 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.2.0 — 22 Oct 2026 — Prachit
+
+MINOR: onboarding becomes three routes, plus more live findings. Pushed straight to `main` at
+Prachit's call, without a PR.
+- PRD FR-1: we ask for the Spotify link and the artist's role, then try **Route 1** (Qloo by
+  Spotify ID), **Route 2** (Spotify link → MusicBrainz MBID → Qloo by MBID, for lyricists stored
+  only as person entries), **Route 3** (taste stand-in). Entries sharing an MBID merge into one
+  card with the artist entry as the signal. Name search without a Spotify link searches by role.
+  Flow in DESIGN.md §2.1, including the MusicBrainz helper (`cue/identity/musicbrainz.py`).
+- DESIGN.md §3 findings: MBID lookup returns every entry for one person; lyricists are usually
+  person-only; names collide ("Divine"); shows carry no music credits; artist-vs-artist Compare
+  doesn't separate shows; the same popular shows top every Indian artist's list; reverse affinity
+  works; fan taste tags from `urn:tag` are noisy; artist trending came back empty; heatmap
+  boundary must be `urn:geohash` or `urn:entity:locality`, not `city`; explainability with one
+  input is trivial.
+- DESIGN.md §6: Q-7 options, led by lift over a comparison group of similar artists.
+- PRD: Q-7 updated, Q-8 now covers `find_by_spotify` and `find_by_musicbrainz`, new Q-9 (artist
+  trending). BUILD_PROMPTS WU-15 uses `urn:entity:locality`.
+
+Action required:
+- Vedant: settle Q-7 and Q-9 before WU-04. WU-01 fan profiles use the artist entry's own tags,
+  not raw `urn:tag` results.
+- All three: agree on Q-8 (now two lookup tools).
+- Prachit: build `cue/identity/musicbrainz.py`, and add a check in `cue/qloo/params.py` that
+  `output.heatmap.boundary` is `urn:geohash` or `urn:entity:locality`.
+
 ## v1.1.0 — 22 Oct 2026 — Prachit
 
 MINOR: new onboarding requirement and live findings.
