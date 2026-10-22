@@ -9,16 +9,16 @@ Every prompt assumes the session has read [CLAUDE.md](CLAUDE.md) first.
 
 | Day | Prachit | Vedant | Swara |
 |---|---|---|---|
-| Tue 21 Oct | Request API keys · WU-00 start | Request key · read Qloo docs, settle Q-1, Q-3 | Request key · WU-11 sources (Q-4) |
-| Wed 22 Oct | WU-00 | WU-01 against recorded shapes | WU-11 |
-| Thu 23 Oct | WU-00 done · data check (Q-2) | WU-01 · WU-02 | WU-11 · demo script draft |
-| Fri 24 Oct | WU-07 | WU-03 · WU-04 | WU-11 done (dev split) |
-| Sat 25 Oct | WU-09 | WU-05 · WU-06 · **artist mode end to end** | Write-up draft |
-| Sun 26 Oct | WU-10 · WU-13 first deploy | WU-08 | Test the live app, file bugs |
-| Mon 27 Oct | WU-13 | WU-12 runner | WU-11 test split |
-| Tue 28 Oct | Eval page | WU-12 full run · WU-15 if time | Screenshots |
-| Wed 29 Oct | Polish, pre-warm cache | Fix eval findings | WU-14 write-up final |
-| Thu 30 Oct | Freeze at noon · submit by 6 PM | Freeze at noon | Submission checklist · submit |
+| Wed 21 Oct | Request API keys · WU-00 start | Request key · read Qloo docs, settle Q-1, Q-3 | Request key · WU-11 sources (Q-4) |
+| Thu 22 Oct | WU-00 | WU-01 against recorded shapes | WU-11 · WU-12 scorers against fake runs |
+| Fri 23 Oct | WU-00 done · data check (Q-2) | WU-01 · WU-02 | WU-11 · WU-12 · demo script draft |
+| Sat 24 Oct | WU-07 | WU-03 · WU-04 | WU-11 done (dev split) · WU-12 systems A and B |
+| Sun 25 Oct | WU-09 | WU-05 · WU-06 · **artist mode end to end** | WU-12 hooks in Cue as system C · write-up draft |
+| Mon 26 Oct | WU-10 · WU-13 first deploy | WU-08 | WU-12 dev-split run · test the live app, file bugs |
+| Tue 27 Oct | WU-13 | Fix what the dev run finds | WU-11 test split · WU-12 smoke eval in CI |
+| Wed 28 Oct | Eval page | WU-15 if time | WU-12 full run · screenshots |
+| Thu 29 Oct | Polish, pre-warm cache | Fix eval findings | WU-14 write-up final |
+| Fri 30 Oct | Freeze at noon · submit by 6 PM | Freeze at noon | Submission checklist · submit |
 
 ## Cut order
 
@@ -50,7 +50,7 @@ deploy · eval page with at least the dev set · license · write-up
 | WU-09 | Website | Prachit | 3 | US-1–US-4 |
 | WU-10 | Trace panel | Prachit | 3 | FR-9 |
 | WU-11 | Eval test set | Swara | 4 | US-6 |
-| WU-12 | Eval runner and scorers | Vedant | 4 | US-6 |
+| WU-12 | Eval runner and scorers | Swara | 4 | US-6 |
 | WU-13 | Deploy | Prachit | 5 | NF-3, NF-6 |
 | WU-14 | Devpost write-up and submission | Swara | 5 | — |
 | WU-15 | Heatmap extra | Vedant | 6 | — |
@@ -201,7 +201,7 @@ noting where we learned it. Use only sources whose terms allow it; record the so
 60 dev and 240 test, fixed, so nobody tunes on test. No Qloo data in this file.
 ```
 
-## WU-12 · Eval runner and scorers · Vedant
+## WU-12 · Eval runner and scorers · Swara
 
 ```
 Read CLAUDE.md and DESIGN.md §8. Build cue/eval/: run systems A (LLM alone), B (LLM plus web

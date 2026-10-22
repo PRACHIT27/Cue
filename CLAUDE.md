@@ -149,11 +149,11 @@ Stay in your lane to avoid merge conflicts. Swapping is fine; edit this section 
 - `cue/agents/` (planner, writer)
 - `cue/scoring/` (fit score)
 - `cue/guards/` (grounding guard, pitch-claim guard)
-- `cue/eval/` runner and scorers
 
-**Swara — PM, docs and demo**
+**Swara — PM, LLM eval, docs and demo**
 - [BUILD_PROMPTS.md](BUILD_PROMPTS.md) and the **Status** section of this file
-- `evalsets/` test-set curation (the known placements)
+- **LLM eval, end to end:** `evalsets/` (the known placements), `cue/eval/` runner and scorers,
+  the GitHub Actions smoke eval, and the eval results the eval page shows
 - Demo script, Devpost write-up, screenshots, submission checklist
 
 **Shared — pull first, edit with care:** `README.md`, `CLAUDE.md`, `requirements.txt`, the docs.
