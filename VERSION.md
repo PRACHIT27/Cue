@@ -17,6 +17,14 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.0.1 — 22 Oct 2026 — Prachit
+
+Swara now owns the LLM eval end to end: `evalsets/`, `cue/eval/` runner and scorers, the CI smoke
+eval and the eval results (CLAUDE.md file ownership, BUILD_PROMPTS.md WU-12). Vedant's part is
+hooking Cue in as system C. The day plan's weekdays were off by one; 22 Oct is a Thursday and the
+deadline, 30 Oct, is a **Friday**.
+Action required: Swara, pick up WU-12. Vedant, drop `cue/eval/` from your list.
+
 ## v1.0.0 — 22 Oct 2026 — Prachit
 
 MAJOR: contract change agreed by all three (PRD Q-6), plus Q-5 confirmed.
