@@ -69,7 +69,7 @@ story.
 
 | ID | Story |
 |---|---|
-| US-1 | As an artist, I enter my name (or three artists I sound like) and see who my fans are |
+| US-1 | As an artist, I paste my Spotify link or type my name (or, if Qloo doesn't know me yet, describe my music) and see who my fans are |
 | US-2 | As an artist, I see a ranked list of shows, films, games, podcasts and brands that fit my fans, each with a reason |
 | US-3 | As an artist, I get a pitch email per production that I can edit and send myself |
 | US-4 | As a supervisor, I enter a show, film, game or brand and get a ranked shortlist of emerging artists |
@@ -78,13 +78,50 @@ story.
 
 ## 7. Functional requirements
 
-### FR-1 Artist lookup (US-1)
+### FR-1 Artist onboarding (US-1)
 
-Resolve an artist name to a Qloo entity with Search. If not found, accept up to three "sounds like"
-artists and use them as the signal.
+Onboarding links the artist to the Qloo entities that stand for them. It always tries the most
+exact route first. Flow and rules are in [DESIGN.md](DESIGN.md) §2.1.
 
-*Acceptance:* a known artist resolves to one Qloo ID; an unknown artist with three sounds-like
-artists still produces a fan profile; an unknown artist with none returns `insufficient_data`.
+**Step 0 — Spotify link (asked first, optional).** Look the Spotify artist ID up with
+`/entities?external.spotify.ids=`. One result is an exact match.
+
+**Path 1 — Qloo knows the artist.** From the Spotify match, or from a name search limited to
+`urn:entity:artist` that returns exactly one exact-name match. Show an "Is this you?" card (name,
+image, short description, listener count). On confirm, save the user-to-entity link so they are
+never asked again.
+
+**Path 2 — Qloo doesn't know the artist.** Build a taste stand-in from a short profile:
+
+| Question | Used for |
+|---|---|
+| Artists you sound like (3–5) | Main signal, each resolved in Qloo by exact match |
+| Your genre | Tags via `/v2/tags`, second signal |
+| Five songs you love | The agent names each song's artist, then resolves them in Qloo |
+| Instagram and Spotify followers | Confirms "emerging"; pitch text only, not a Qloo signal |
+| Previous work | Pitch text; the only placement claims the claim guard allows |
+| Career goal | Which production types to search first (e.g. ads puts brands first) |
+
+The agent turns the answers into Qloo artist IDs and tag IDs. Any suggestion that doesn't resolve
+to an exact Qloo match is dropped. The artist sees the stand-in ("we'll match you as a mix of A, B
+and C, plus these tags") and can edit it before the run.
+
+**Path 3 — more than one match for the name.** If the entries share a Spotify or MusicBrainz ID,
+they are the same artist: merge them and use every ID as a signal. Otherwise narrow by the genre and
+country the artist gave; if more than one is left, show up to three cards to pick from, plus "None
+of these is me", which goes to Path 2. Save the choice.
+
+*Acceptance:*
+- A Spotify link Qloo knows resolves to one artist entity with no other questions
+- Name search only ever returns `urn:entity:artist` entries; a fuzzy near-match ("Aditi Ramesh" →
+  "Ramesh") is never accepted
+- Two entries sharing a Spotify or MusicBrainz ID show as one card
+- An unknown artist with at least one resolvable sounds-like artist gets a fan profile; with none,
+  `insufficient_data`
+- Every artist the agent suggests in Path 2 is a real Qloo entity, and the user saw and confirmed
+  the stand-in
+- Output from a Path 2 run says matches are based on artists the user resembles
+- A confirmed choice is reused on the next visit without asking again
 
 ### FR-2 Fan profile (US-1)
 
@@ -205,6 +242,8 @@ mode end to end by 25 Oct, supervisor mode and eval by 28 Oct, submitted by 30 O
 | # | Question | Owner | Blocks |
 |---|---|---|---|
 | Q-4 | Where do we get ~300 known placements, and are we allowed to use that source? | Swara | WU-11 |
+| Q-7 | The fit formula's two biggest inputs are weak: Insights affinity barely varies (top TV results all 0.945–0.956), and Compare finds no shared tags between an artist and a show. What replaces `overlap`, and how much weight should affinity keep? See [DESIGN.md](DESIGN.md) §6 | Vedant | WU-04 |
+| Q-8 | Onboarding needs a lookup by Spotify ID. Add `find_by_spotify(spotify_id) -> list[EntityRef]` to the contract (§7.1)? | all three | WU-01, FR-1 |
 
 ### Answered — 22 Oct 2026, agreed by the team
 
