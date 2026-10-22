@@ -44,7 +44,7 @@ You can watch every step, and every Qloo call, in the trace panel.
 | Audiences, Audience types | Describes who the fans are |
 | Insights | Builds taste profiles and finds matches across TV, film, games, podcasts and brands |
 | Compare | Scores how well an artist and a production fit |
-| Trending | Favours productions and artists that are rising |
+| Trending | Favours productions and artists that were rising (Qloo's data runs to July 2026) |
 
 ## What we do not claim
 

@@ -144,8 +144,8 @@ Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against t
   `filter.start_date` and `filter.end_date`, and returns a weekly series for that entity
   (`population_percentile`, `population_rank`, `population_rank_velocity`,
   `velocity_fold_change`). **The hackathon data ends around 30 Jul 2026**, so a window ending after
-  that comes back empty. Query the 12 weeks up to the latest available week. This doesn't match
-  the `trending(entity_type, take)` signature in §7.1; see VERSION.md.
+  that comes back empty. Query the 12 weeks up to the latest available week. The `trending` tool
+  in §7.1 takes one entity and returns this series with its as-of date.
 - **Demographics** returns `results.demographics[0].query.age` (six buckets, `24_and_younger` to
   `55_and_older`) and `.gender` (`male`, `female`), each from −1 to 1.
 - **Heatmap** returns `results.heatmap[]`, each with `location` (lat, lon, geohash) and `query`
@@ -212,7 +212,7 @@ Plain code in `cue/scoring/fit.py`. Inputs are normalised to 0–1 by the Qloo t
 |---|---|
 | `affinity` | Insights result's affinity for the candidate |
 | `overlap` | Compare result between the two entities |
-| `trend` | Trending signal for the candidate (0 if not trending) |
+| `trend` | The candidate's latest week from `trending`, scaled to 0–1 (0 if no data) |
 | `audience` | How closely the candidate's age and gender lean matches the source's |
 
 ```
@@ -222,6 +222,8 @@ fit = 0.50 * affinity + 0.30 * overlap + 0.10 * audience + 0.10 * trend
 - Missing `affinity` or `overlap` gives `insufficient_data`, not a number
 - Weights are a starting point, tuned only on the eval's dev split, never on the test split
 - Which Qloo response fields feed each input is settled in WU-01 and logged in VERSION.md
+- `trend` is only as recent as Qloo's data, which ends about 30 Jul 2026. Every place that shows
+  it, in the UI, the pitch kit and the brief, labels it "as of July 2026", never as current
 
 ## 7. The agreed contract
 
@@ -238,14 +240,16 @@ async def find_audiences(query: str | None = None, audience_types: list[str] | N
 async def get_audience_types() -> list[str]
 async def insights(request: InsightsRequest) -> InsightsResult
 async def compare(a_ids: list[str], b_ids: list[str]) -> CompareResult
-async def trending(entity_type: str, take: int = 20) -> list[TrendingItem]
+async def trending(entity_id: str, entity_type: str) -> TrendSeries
 ```
 
 ### 7.2 Records
 
 ```python
 EntityRef      id, name, type, popularity
-Match          source_id, candidate: EntityRef, affinity, overlap, audience, trend, explanation
+Match          source_id, candidate: EntityRef, affinity, overlap, audience, trend, trend_as_of: date | None, explanation
+TrendSeries    entity_id, as_of: date | None, weeks: list[TrendWeek]
+TrendWeek      week_start: date, percentile, rank, rank_velocity, velocity_fold_change
 FitScore       match_id, value: float | None, status: "ok" | "insufficient_data", inputs: dict
 PitchKit       run_id, artist_id, items: list[PitchItem]
 PitchItem      candidate: EntityRef, fit: FitScore, reason: str, email_subject: str, email_body: str
