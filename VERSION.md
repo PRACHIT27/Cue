@@ -17,6 +17,26 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.1.0 — 22 Oct 2026 — Prachit
+
+MINOR: new onboarding requirement and live findings.
+- PRD FR-1 is now **Artist onboarding** with three paths: Spotify ID first, then a name search
+  limited to `urn:entity:artist`, then a taste stand-in (sounds-like artists, genre tags, song
+  artists) for artists Qloo doesn't know. Duplicates are merged when they share a Spotify or
+  MusicBrainz ID; otherwise the artist picks. Flow in DESIGN.md §2.1. US-1 updated.
+- DESIGN.md §3: artists also exist as `urn:entity:person` entries, and signalling with those gives
+  different results and empty demographics, so always search with `types=urn:entity:artist`.
+  Spotify lookup via `/entities?external.spotify.ids=` is exact. Compare's shared-tag list is
+  empty for artist vs TV show. Affinity is nearly flat across top results.
+- New open questions: Q-7 (the fit formula's overlap and affinity inputs are weak), Q-8 (add
+  `find_by_spotify` to the contract).
+
+Action required:
+- Vedant: settle Q-7 before WU-04. In WU-01, `find_entity` for artists always passes
+  `types=urn:entity:artist`.
+- All three: agree on Q-8. If yes, it goes in its own contract PR with a MAJOR bump.
+- Swara: demo picks should be checked with the artist entry, not the person entry.
+
 ## v1.0.1 — 22 Oct 2026 — Prachit
 
 Swara now owns the LLM eval end to end: `evalsets/`, `cue/eval/` runner and scorers, the CI smoke

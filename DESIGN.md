@@ -42,12 +42,43 @@ goes through one client, and only a cache miss reaches the API.
 
 | Step | Artist mode | Supervisor mode | Qloo endpoints |
 |---|---|---|---|
-| 1 Find | Find the artist; fall back to sounds-like artists | Find the show, film, game or brand | Search, Entities by ID |
+| 1 Find | Onboarding (§2.1): Spotify ID, then name search, then a taste stand-in | Find the show, film, game or brand | Entities by external ID, Search, Tags |
 | 2 Profile | Fan taste tags, age and gender lean, audiences | Audience taste tags, age and gender lean, audiences | Insights (tags), Tags, Tag types, Audiences, Audience types |
 | 3 Match | Insights for TV, movies, games, podcasts, brands, in parallel | Insights for artists with `filter.popularity.max` | Insights |
 | 4 Check | Compare artist vs each top production; trending shows | Compare production vs each top artist; trending artists | Compare, Trending |
 | 5 Score and write | Fit score in code; pitch kit per production | Same fit score; shortlist brief | — |
 | Extra | Where fans cluster, for local ad and radio pitches | Where the show's audience clusters | Insights (heatmap) |
+
+### 2.1 Artist onboarding
+
+```mermaid
+flowchart TB
+    S[Spotify link?] -->|yes| L["/entities?external.spotify.ids="]
+    L -->|one artist| C[Is this you? card]
+    L -->|not found| N
+    S -->|no| N["/search, types=urn:entity:artist"]
+    N -->|no exact-name match| P2[Path 2: taste stand-in]
+    N -->|one exact match| C
+    N -->|two or more| D{Same Spotify or<br/>MusicBrainz ID?}
+    D -->|yes| M[Merge, use every ID] --> C
+    D -->|no| F[Narrow by genre and country]
+    F -->|one left| C
+    F -->|several| K[Pick from up to 3 cards]
+    K -->|none of these is me| P2
+    K --> C
+    C -->|confirmed| V[(Save user to entity IDs)]
+    P2 --> Q[Agent resolves sounds-like artists,<br/>song artists and genre tags in Qloo]
+    Q --> E[Show the stand-in, user edits and confirms]
+    E --> V
+```
+
+- **Exact name match** means the normalised name equals the query (case, accents and spacing
+  ignored). Search's first hit is never taken on its own.
+- **Path 2 signals:** sounds-like and song artists go in `signal.interests.entities`, genre tags in
+  `signal.interests.tags`. Explainability then says which input drove each match.
+- **Saved link:** the confirmed user-to-entity mapping lives in Supabase. It holds Qloo IDs we chose,
+  not Qloo response data.
+- **Honesty:** results from a stand-in say "based on artists you resemble".
 
 ```mermaid
 sequenceDiagram
@@ -133,13 +164,22 @@ Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against t
 - **Search returns wrong top hits.** When the exact name isn't in Qloo, `/search` still returns
   its nearest fuzzy match first ("Aditi Ramesh" → "Ramesh"). `find_entity` must check the name
   matches and return not found otherwise, never take the first hit blindly.
+- **Artists also exist as people.** Prateek Kuhad comes back twice: a `urn:entity:person` entry
+  with no Spotify ID, and the `urn:entity:artist` entry with Spotify, MusicBrainz and Wikidata IDs.
+  Both share one MusicBrainz ID. Signalling with the person entry gives different matches and an
+  empty demographics result. Always pass `types=urn:entity:artist` to `/search` for artists.
+- **Spotify lookup is exact.** `/entities?external.spotify.ids=<id>` returned the single artist
+  entry. This is the first step of onboarding (§2.1).
 - **Games skew to blockbusters.** Without a cap, game affinities return the most popular titles
   for almost any artist. Use `filter.popularity.max` (about 0.9) for games.
 - **Duplicate titles.** The same title can appear twice with different entity IDs (seasons or
   versions). De-duplicate by normalised title and keep every ID for the grounding guard.
 - **Compare** takes `a.signal.interests.entities` and `b.signal.interests.entities` and returns
-  the shared tags, each with `query.score` (0–1). There is no single overlap number; WU-01 decides
-  how to turn the tag scores into `overlap` and logs it here.
+  `results.tags` (shared tags, each with `query.score`), plus `results.a` and `results.b` (each
+  side's own tags). **Between an artist and a TV show, the shared list came back empty**: music tags
+  and TV tags rarely overlap. See PRD Q-7.
+- **Affinity barely varies.** For Prateek Kuhad, the top five TV shows scored 0.945–0.956. Rank
+  order carries more information than the raw number. See PRD Q-7.
 - **Trending is per entity, not a list.** `/v2/trending` requires `signal.interests.entities`,
   `filter.start_date` and `filter.end_date`, and returns a weekly series for that entity
   (`population_percentile`, `population_rank`, `population_rank_velocity`,
@@ -219,6 +259,12 @@ Plain code in `cue/scoring/fit.py`. Inputs are normalised to 0–1 by the Qloo t
 fit = 0.50 * affinity + 0.30 * overlap + 0.10 * audience + 0.10 * trend
 ```
 
+- **Known problem (PRD Q-7):** live calls show `overlap` is usually empty for artist vs production,
+  and `affinity` is nearly flat. Under the rule below, most matches would become
+  `insufficient_data`. Options for WU-04: compare the two *audiences'* taste tags (Insights
+  `urn:tag` with each side as the signal) instead of the entities' own tags; use rank position
+  instead of raw affinity; give `audience` more weight now that demographics works for artist
+  entries. Decide before WU-04 and log it in VERSION.md
 - Missing `affinity` or `overlap` gives `insufficient_data`, not a number
 - Weights are a starting point, tuned only on the eval's dev split, never on the test split
 - Which Qloo response fields feed each input is settled in WU-01 and logged in VERSION.md
