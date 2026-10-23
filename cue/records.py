@@ -31,3 +31,33 @@ class FitScore:
     value: float | None
     status: FitStatus
     inputs: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PitchItem:
+    candidate: EntityRef
+    fit: FitScore
+    reason: str
+    email_subject: str
+    email_body: str
+
+
+@dataclass(frozen=True)
+class PitchKit:
+    run_id: str
+    artist_id: str
+    items: tuple[PitchItem, ...]
+
+
+@dataclass(frozen=True)
+class BriefItem:
+    candidate: EntityRef
+    fit: FitScore
+    reason: str
+
+
+@dataclass(frozen=True)
+class Brief:
+    run_id: str
+    production_id: str
+    artists: tuple[BriefItem, ...]
