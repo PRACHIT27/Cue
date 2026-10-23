@@ -17,6 +17,30 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.4.4 — 24 Oct 2026 — Vedant
+
+Supervisor mode drops artists who have died or disbanded (option B), via a MusicBrainz helper.
+- **New:** `cue/identity/musicbrainz.py`. Vedant built it in Prachit's folder at the team's request,
+  so Prachit please review it: it's meant to serve your onboarding route too. `shared_client()` is
+  one client for the app, with a 1 rps `TokenBucket`, a 30-day `InMemoryCache`, retries on 503/429
+  and no calls in `DEMO_MODE`. It offers `life_span(mbid)` and `find_mbid_by_spotify(spotify_id)`.
+- **Supervisor flow:** the top 12 after scoring get a life-span check (MBIDs come from the same
+  `get_entities` call that gives the Spotify links). `ended` drops the artist as a `guard_drop`
+  (`guard="life_span"`). No MBID, or no answer, keeps the artist with
+  `FitScore.inputs["life_span"] = "unverified"`; otherwise it's `"active"`. The first 8 left are
+  shortlisted.
+- Live, *Bandish Bandits*: dropped Bhimsen Joshi (2011), Mehdi Hassan (2012), Meet Bros Anjjan
+  (2015) and Rashid Khan (2024). About 30 s on a cold cache, $0.0012 of Claude.
+- **Still missed:** artists whose Qloo entry has no MBID (Shiv Kumar Sharma, shown as unverified),
+  and one person under two Qloo entries ("Ustad Rashid Khan"). Possible follow-ups: a MusicBrainz
+  name search with strict matching when the MBID is missing, and ignoring honorifics when merging.
+- DESIGN.md §2.1 updated.
+
+Action required:
+- Prachit: review `cue/identity/musicbrainz.py` and use `find_mbid_by_spotify` for onboarding route 2,
+  through `shared_client()` so the 1 rps limit is shared. Show "unverified" in the UI when
+  `inputs["life_span"]` says so.
+
 ## v1.4.3 — 24 Oct 2026 — Vedant
 
 Supervisor mode says **under-the-radar**, not emerging (option A from v1.4.2's known problem).

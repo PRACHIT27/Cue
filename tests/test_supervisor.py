@@ -2,6 +2,7 @@ import asyncio
 
 from cue.agents.supervisor_run import SHORTLIST_LABEL, UNDER_RADAR_CAP, WIDENED_CAP, run_supervisor
 from cue.agents.writer import build_brief_prompt
+from cue.identity.musicbrainz import LifeSpan
 from cue.harness.events import RunEvents
 from cue.records import FitScore, Match
 from cue.tools.records import Demographics, Entity, EntityRef, InsightsItem, InsightsRequest, InsightsResult
@@ -13,7 +14,7 @@ def artist(i, pop, name=None):
     return EntityRef(i, name or f"Artist {i}", "urn:entity:artist", pop)
 
 
-def fake_tools(artists, wide=None):
+def fake_tools(artists, wide=None, ended=(), no_mbid=()):
     calls = []
 
     def result(items):
@@ -36,9 +37,16 @@ def fake_tools(artists, wide=None):
         return InsightsResult(InsightsRequest("urn:demographics"), demographics=tuple(Demographics(i, {"25_to_29": 0.3}, {"female": 0.1}) for i in ids))
 
     async def get_entities(ids):
-        return [Entity(EntityRef(i, f"Artist {i}", "urn:entity:artist", 0.5), spotify_id=f"sp{i}") for i in ids]
+        return [Entity(EntityRef(i, f"Artist {i}", "urn:entity:artist", 0.5), spotify_id=f"sp{i}", musicbrainz_id=None if i in no_mbid else f"mb{i}") for i in ids]
 
-    tools = {"similar_productions": similar_productions, "lesser_known_artists": lesser_known_artists, "artists_group": artists_group, "demographics": demographics, "get_entities": get_entities}
+    async def life_span(mbid):
+        calls.append(("life", mbid))
+        if not mbid:
+            return None
+        artist_id = mbid[2:]
+        return LifeSpan(mbid, "Person", "1922", "2011-01-24" if artist_id in ended else None, artist_id in ended)
+
+    tools = {"similar_productions": similar_productions, "lesser_known_artists": lesser_known_artists, "artists_group": artists_group, "demographics": demographics, "get_entities": get_entities, "life_span": life_span}
     return tools, calls
 
 
@@ -105,3 +113,25 @@ def test_group_is_asked_about_exactly_our_candidates():
     group_ids = next(c[1] for c in calls if isinstance(c, tuple) and c[0] == "group")
     assert set(group_ids) == {m.candidate.id for m in out.matches}
     assert all(s.inputs["lift"] is not None and s.inputs["lift"] > 0 for s in out.scores)
+
+
+def test_artists_who_died_or_disbanded_are_dropped_and_logged():
+    tools, calls = fake_tools(many(12), ended={"a0", "a1"})
+    out, events = run(tools)
+    assert {"a0", "a1"}.isdisjoint({i.candidate.id for i in out.brief.artists})
+    assert len(out.brief.artists) == 8
+    drops = [d for d in out.drops if d.guard == "life_span"]
+    assert len(drops) == 2 and "2011" in drops[0].reason
+    assert any(e["kind"] == "guard_drop" and e["guard"] == "life_span" for e in events)
+
+
+def test_no_mbid_keeps_the_artist_marked_unverified():
+    out, _ = run(fake_tools(many(10), no_mbid={"a0"})[0])
+    labels = {i.candidate.id: i.fit.inputs["life_span"] for i in out.brief.artists}
+    assert labels.get("a0") == "unverified" and labels.get("a1") == "active"
+
+
+def test_life_span_is_checked_for_at_most_twelve_artists():
+    tools, calls = fake_tools(many(30))
+    run(tools)
+    assert sum(1 for c in calls if isinstance(c, tuple) and c[0] == "life") == 12

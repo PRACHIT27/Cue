@@ -13,6 +13,7 @@ from cue.harness.plan import Plan, PlannedCall
 from cue.records import Brief, FitScore, Match
 from cue.scoring.fit import score_matches
 from cue.scoring.lift import audience_similarity, lift_scores
+from cue.identity.musicbrainz import LifeSpan, shared_client
 from cue.tools import get_entities, insights
 from cue.tools.records import Demographics, InsightsItem, InsightsRequest, InsightsResult
 
@@ -25,6 +26,7 @@ ARTIST_TAKE = 30
 GROUP_SIZE = 4
 GROUP_TAKE = 50
 SHORTLIST = 8
+LIFE_CHECKS = 12
 LLMCall = Callable[..., Awaitable[dict[str, Any]]]
 
 
@@ -52,7 +54,12 @@ async def demographics(ids: list[str]) -> InsightsResult:
     return await insights(InsightsRequest("urn:demographics", tuple(ids)))
 
 
+async def life_span(mbid: str | None) -> LifeSpan | None:
+    return await shared_client().life_span(mbid or "")
+
+
 SUPERVISOR_TOOLS = {
+    "life_span": life_span,
     "similar_productions": similar_productions,
     "lesser_known_artists": lesser_known_artists,
     "artists_group": artists_group,
@@ -122,6 +129,7 @@ async def run_supervisor(
     follow_up = []
     if items:
         follow_up.append(PlannedCall("audiences", "demographics", {"ids": [i.candidate.id for i in items]}))
+        follow_up.append(PlannedCall("profiles", "get_entities", {"ids": [i.candidate.id for i in items]}))
         if similar_ids:
             follow_up.append(PlannedCall("group", "artists_group", {"group_ids": list(similar_ids), "candidates": candidate_result}))
     audience_calls = await execute(Plan(tuple(follow_up)), tools, events) if follow_up else {}
@@ -139,15 +147,30 @@ async def run_supervisor(
     ranked = sorted(
         ((m, by_id[m.match_id]) for m in matches if by_id[m.match_id].status == "ok"),
         key=lambda p: (-p[1].value, -(p[1].inputs.get("lift") or 0), p[0].candidate.name),
-    )[:SHORTLIST]
+    )[:LIFE_CHECKS]
 
-    if ranked:
-        links = await execute(Plan((PlannedCall("profiles", "get_entities", {"ids": [m.candidate.id for m, _ in ranked]}),)), tools, events)
-        spotify = {e.ref.id: e.spotify_id for e in (_ok(links, "profiles") or [])}
-        ranked = [
-            (m, replace(f, inputs={**f.inputs, "spotify_url": f"https://open.spotify.com/artist/{spotify[m.candidate.id]}" if spotify.get(m.candidate.id) else None}))
-            for m, f in ranked
-        ]
+    profiles = {e.ref.id: e for e in (_ok(audience_calls, "profiles") or [])}
+    checks = Plan(tuple(PlannedCall(f"life_{n}", "life_span", {"mbid": getattr(profiles.get(m.candidate.id), "musicbrainz_id", None)}) for n, (m, _) in enumerate(ranked)))
+    spans = await execute(checks, tools, events) if checks.calls else {}
+    shortlisted: list[tuple[Match, FitScore]] = []
+    for n, (match, fit) in enumerate(ranked):
+        span = _ok(spans, f"life_{n}")
+        if span is not None and span.ended:
+            reason = "died or disbanded, per MusicBrainz" + (f" ({span.end[:4]})" if span.end else "")
+            drop = Drop("life_span", reason, match.candidate.name)
+            drops.append(drop)
+            events.emit("guard_drop", guard=drop.guard, reason=drop.reason, text=drop.text)
+            continue
+        profile = profiles.get(match.candidate.id)
+        spotify_id = profile.spotify_id if profile else None
+        extra = {
+            "life_span": "active" if span is not None else "unverified",
+            "spotify_url": f"https://open.spotify.com/artist/{spotify_id}" if spotify_id else None,
+        }
+        shortlisted.append((match, replace(fit, inputs={**fit.inputs, **extra})))
+        if len(shortlisted) == SHORTLIST:
+            break
+    ranked = shortlisted
 
     events.emit("step_start", step="writer", tool="writer", picks=len(ranked))
     written = await write_brief(production_id, production_name, production_type, ranked, llm=llm, brief=brief)

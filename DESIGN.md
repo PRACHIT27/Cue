@@ -76,10 +76,12 @@ flowchart TB
   ignored). Search's first hit is never taken on its own.
 - **Search type by role:** singers, bands, composers and producers search `urn:entity:artist`;
   lyricists search `urn:entity:person`, then `urn:entity:author`.
-- **MusicBrainz** is used only to turn a Spotify link into an MBID. It lives in its own small
-  helper outside the Qloo client (`cue/identity/musicbrainz.py`), allows about 1 request per
-  second, needs a descriptive `User-Agent`, and its results are cached like name lookups. Taste
-  data always comes from Qloo.
+- **MusicBrainz** has two jobs, both in `cue/identity/musicbrainz.py`, outside the Qloo client:
+  turning a Spotify link into an MBID (`find_mbid_by_spotify`, onboarding), and checking whether a
+  shortlisted artist has died or disbanded (`life_span`, supervisor mode). One shared client
+  allows 1 request per second across the whole app, sends a descriptive `User-Agent`, caches for
+  30 days and makes no call in `DEMO_MODE`. Any failure means "unknown", never "ended". Taste data
+  always comes from Qloo.
 - **Route 3 signals:** sounds-like and song artists go in `signal.interests.entities`, genre tags in
   `signal.interests.tags`. Explainability then says which input drove each match.
 - **Saved link:** the confirmed user-to-entity mapping lives in Supabase. It holds Qloo IDs we chose,
