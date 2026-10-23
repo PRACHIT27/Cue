@@ -17,7 +17,7 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
-## v1.2.1 — 23 Oct 2026 — Vedant
+## v1.2.2 — 23 Oct 2026 — Vedant
 
 WU-01: the nine Qloo tools in `cue/tools/`, with the §7.1 signatures, all through the WU-00 client.
 Every tool ran live once (15 calls, 0 errors); tests use fake values only.
@@ -47,6 +47,15 @@ Action required:
 - Vedant: settle Q-7 and Q-9 before WU-04. Per v1.2.0, fan profiles use the artist entry's own
   tags (`get_entities(...)[0].tags`), not raw `urn:tag` results; the harness builds profiles that
   way in WU-02/WU-03.
+
+## v1.2.1 — 22 Oct 2026 — Prachit
+
+PATCH: heatmap corrected from a live retry. It needs an area (`filter.location.query`), and only
+the default geohash boundary returns data; `urn:entity:locality` gave nothing. It maps
+neighbourhoods within one city, not cities. DESIGN.md §2 Extra row, §3 and the WU-15 prompt
+updated. Pushed straight to `main`.
+Action required: Prachit, the `params.py` boundary check should allow `urn:geohash` only for now,
+and require `filter.location` or `filter.location.query` for `urn:heatmap`.
 
 ## v1.2.0 — 22 Oct 2026 — Prachit
 
