@@ -17,6 +17,161 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.4.6 — 24 Oct 2026 — Vedant
+
+A command-line runner, and steadier writing.
+- **`python -m cue.run artist|supervisor "Name"`** runs either mode end to end, with `--brief`,
+  `--sounds-like` (for an artist Qloo doesn't know), `--type` (supervisor), `--entity-id`,
+  `--emails`, `--trace` (every step and Qloo call) and `--json out.json` (the full result plus
+  events, the shape the website will receive). Each run prints its Claude cost. README Setup
+  updated.
+- **No blank reasons:** if the guards remove a reason line, a sentence built by code from the
+  facts takes its place.
+- **Writer:** the fact lines no longer say a production is "the strongest in its group", and the
+  writer may not rank productions, use "over-index", or state anything about a production's plot,
+  setting or mood. It may only imagine a scene the music could suit. A live run had claimed *Ved*
+  has a "monsoon setting".
+
+Action required:
+- Swara: use `python -m cue.run ... --emails --trace` to check demo picks before the shoot.
+
+## v1.4.5 — 24 Oct 2026 — Vedant
+
+Closes the gaps listed in v1.4.4.
+- **Honorifics:** `artist_key()` in `cue/tools/names.py` ignores leading titles (Ustad, Pandit,
+  Pt., Shri, Smt., Begum, Dr.…). Supervisor mode merges candidates with the same key, so "Ustad
+  Rashid Khan" and "Rashid Khan" are one artist, and if any of their entries has ended, the artist
+  is dropped. `normalise_name` is unchanged, so onboarding's exact matching still sees honorifics.
+- **No MBID:** `find_mbid_by_name(name)` searches MusicBrainz and accepts a result only when exactly
+  one artist matches with spaces ignored, so "Shiv Kumar Sharma" finds "Shivkumar Sharma". If the
+  exact spelling finds nothing, it tries the first two words joined. Checked live: Shiv Kumar
+  Sharma (died 2022) and Ustad Rashid Khan (died 2024) are now found and dropped.
+- **Writer:** artists are "they/their", never "it", and no gender is guessed. Both writer prompts
+  were bumped.
+
+Action required: none.
+
+## v1.4.4 — 24 Oct 2026 — Vedant
+
+Supervisor mode drops artists who have died or disbanded (option B), via a MusicBrainz helper.
+- **New:** `cue/identity/musicbrainz.py`. Vedant built it in Prachit's folder at the team's request,
+  so Prachit please review it: it's meant to serve your onboarding route too. `shared_client()` is
+  one client for the app, with a 1 rps `TokenBucket`, a 30-day `InMemoryCache`, retries on 503/429
+  and no calls in `DEMO_MODE`. It offers `life_span(mbid)` and `find_mbid_by_spotify(spotify_id)`.
+- **Supervisor flow:** the top 12 after scoring get a life-span check (MBIDs come from the same
+  `get_entities` call that gives the Spotify links). `ended` drops the artist as a `guard_drop`
+  (`guard="life_span"`). No MBID, or no answer, keeps the artist with
+  `FitScore.inputs["life_span"] = "unverified"`; otherwise it's `"active"`. The first 8 left are
+  shortlisted.
+- Live, *Bandish Bandits*: dropped Bhimsen Joshi (2011), Mehdi Hassan (2012), Meet Bros Anjjan
+  (2015) and Rashid Khan (2024). About 30 s on a cold cache, $0.0012 of Claude.
+- **Still missed:** artists whose Qloo entry has no MBID (Shiv Kumar Sharma, shown as unverified),
+  and one person under two Qloo entries ("Ustad Rashid Khan"). Possible follow-ups: a MusicBrainz
+  name search with strict matching when the MBID is missing, and ignoring honorifics when merging.
+- DESIGN.md §2.1 updated.
+
+Action required:
+- Prachit: review `cue/identity/musicbrainz.py` and use `find_mbid_by_spotify` for onboarding route 2,
+  through `shared_client()` so the 1 rps limit is shared. Show "unverified" in the UI when
+  `inputs["life_span"]` says so.
+
+## v1.4.3 — 24 Oct 2026 — Vedant
+
+Supervisor mode says **under-the-radar**, not emerging (option A from v1.4.2's known problem).
+- Qloo carries no birth, death or debut dates for artists, so a popularity cap can't tell a
+  newcomer from a veteran: *Bandish Bandits* returned Bhimsen Joshi and Mehdi Hassan. The shortlist
+  is now labelled "Under-the-radar artists" (`SHORTLIST_LABEL`, also on the `result` event), the
+  writer calls them lesser-known and is told never to say new, emerging, up-and-coming or rising.
+- PRD FR-8, US-4 and §13, README, CLAUDE.md and DESIGN §5 and §8 updated. Artist mode's "emerging
+  musicians" is unchanged: it describes who uses Cue, which is accurate.
+- Next, option B: check each shortlisted artist's MusicBrainz life-span and drop artists who have
+  died or disbanded, reusing Prachit's `cue/identity/musicbrainz.py`.
+
+Action required:
+- Prachit: show `SHORTLIST_LABEL` as the supervisor results heading.
+- Swara: in BUILD_PROMPTS WU-12, the eval metric "emerging share" is now "under-the-radar share".
+  Demo script and write-up: say "under-the-radar", never "emerging", for supervisor results.
+
+## v1.4.2 — 24 Oct 2026 — Vedant
+
+WU-08 supervisor mode (`cue/agents/supervisor_run.py`) and a sturdier writer.
+- `run_supervisor(production_id, production_name, production_type, events, brief=)`: artists
+  liked by the production's audience, capped at popularity 0.80 (PRD Q-5). If fewer than 8 come
+  back, the cap widens to 0.85 and a `step="widen"` event says so. Lift compares with 4 similar
+  productions' audiences, asked about exactly our candidates (`filter.results.entities`), so every
+  artist gets a real comparison instead of a guessed baseline. Each shortlisted artist gets a
+  Spotify link in `FitScore.inputs["spotify_url"]`. The writer returns a `Brief`.
+- Live check, *Bandish Bandits*: 30 candidates, all ≤ 0.80, 8 on the shortlist, about 26 s,
+  $0.002 of Claude on Haiku.
+- **Writer failures no longer crash a run:** the run returns its scored matches with no text, and a
+  `guard_drop` saying why. Writer `max_tokens` is 8000, because Haiku's thinking shares the budget.
+- **Known problem: "emerging" isn't "new".** The 0.80 cap returns veteran and late classical
+  artists (Bhimsen Joshi, Mehdi Hassan), and Qloo carries no birth, death or debut dates for
+  artists. Needs a decision; see the PR.
+
+Action required:
+- Prachit: `run_supervisor(...)` is the entry point for `POST /runs` in supervisor mode; show
+  `spotify_url` as a Listen link.
+- All: decide how supervisor mode handles veteran artists before the demo.
+
+## v1.4.1 — 24 Oct 2026 — Vedant
+
+WU-06 writer and the artist run end to end (`cue/agents/artist_run.py`).
+- One live run for Prateek Kuhad with the brief "acoustic songs for a monsoon romance scene":
+  109 matches scored, 9 pitches (3 per section), about 28 s, $0.0017 of Claude on Haiku.
+- **Content filter** (`cue/guards/content.py`): drops candidates whose titles contain explicit
+  words, before scoring. It only checks titles; a tag-based check would be stronger.
+- **Fixes from the live runs:** Insights rows carry the real type in `subtype` (`type` is just
+  `urn:entity`), which broke type labels and the per-type limit. Comparison-group calls now set no
+  popularity cap, because the default games cap hid mega-games from the group and inflated their
+  lift. The planner now leaves out production types a brief rules out (no shooting games for a
+  monsoon romance).
+- DESIGN.md §4: the writer's aliases, schema and style rules.
+
+Action required:
+- Prachit: `run_artist(signal_ids, artist_name, events, brief=, basis=)` is the entry point for
+  `POST /runs` in artist mode. Pass `RunEvents(run_id, sink)` and the client's `sink=events.qloo_sink`
+  so every event lands in one stream.
+
+## v1.4.0 — 24 Oct 2026 — Vedant
+
+MINOR: WU-02 planner, WU-03 executor and WU-05 guards; the planner design changed.
+- **DESIGN.md §4:** the planner outputs decisions (production types, sections, brief tags, lift
+  on or off, a note), not raw calls; code builds the calls. It gets a second round after seeing a
+  summary of the first. All model calls go through `cue/agents/common/llm.py`, which caches by
+  `PROMPT_VERSION` and refuses calls that could pass `LLM_BUDGET_USD`.
+- **New setting:** `LLM_BUDGET_USD` in `.env` (and Secret Manager). With it unset, no paid call is made.
+- `anthropic>=2.1,<3` added to `requirements.txt`.
+- Executor timeout is 20 s per call: with ~25 calls a run, time queued behind the rate limiter was
+  hitting 10 s.
+- Fixed: the default games cap (0.90) no longer clashes with the big-screen section's 0.90 floor.
+
+Action required:
+- Prachit: set `LLM_BUDGET_USD` with the deploy key. Run events now include planner steps
+  (`step="planner"`, with `note`) for the trace panel.
+- All: Qloo returns adult titles (one podcast in a live run). A content filter is needed before the
+  writer can pitch anything; Vedant adds it with WU-06.
+
+## v1.3.0 — 24 Oct 2026 — Vedant
+
+MINOR: PRD Q-7 and Q-9 settled from live calls; the fit score is redefined.
+- **DESIGN.md §6:** productions split into three popularity sections (big screen ≥ 0.90, prime
+  time 0.70–0.90, indie gems < 0.70), each its own Insights call. Inside a section they rank by
+  `match = 0.70 × lift_rank + 0.30 × audience`. **Lift** = how much more this artist's fans like a
+  production than a comparison group of 4 similar artists' fans do, from one extra Insights call
+  per production type. Compare overlap, reverse affinity and trend are dropped from the score.
+- **No contract change:** `lift`, `lift_rank`, `audience` and `section` go in `FitScore.inputs`;
+  `Match.overlap` and `Match.trend` stay `None`.
+- **PRD Q-9:** artist trending needs a window longer than about 13 weeks (the tool now fetches 16),
+  but Qloo's trending data stopped changing around Dec 2025 for every entity checked. Cue doesn't
+  use or show trend. PRD FR-3 and FR-4 updated to match.
+
+Action required:
+- Prachit: group result cards by `FitScore.inputs["section"]`, and drop the "as of July 2026" trend
+  label from `web/`, since no trend is shown.
+- Swara: the demo script and write-up should explain lift ("your fans over-index on X compared with
+  fans of similar artists") and say plainly that trend isn't shown because Qloo's data is static.
+
 ## v1.2.2 — 23 Oct 2026 — Vedant
 
 WU-01: the nine Qloo tools in `cue/tools/`, with the §7.1 signatures, all through the WU-00 client.

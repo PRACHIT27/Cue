@@ -12,7 +12,7 @@
 Cue is an agent that matches emerging musicians with the TV shows, films, video games, podcasts and
 ads whose audiences already love their sound. It works in two directions. An artist gets a ranked
 list of productions to pitch and a ready-to-send pitch kit. A music supervisor gets a ranked
-shortlist of emerging artists who fit their show. Qloo's taste data drives every match; plain code
+shortlist of under-the-radar artists who fit their show. Qloo's taste data drives every match; plain code
 scores them; an LLM plans the work and writes the output.
 
 ## 2. Problem statement
@@ -72,7 +72,7 @@ story.
 | US-1 | As an artist, I paste my Spotify link or type my name (or, if Qloo doesn't know me yet, describe my music) and see who my fans are |
 | US-2 | As an artist, I see a ranked list of shows, films, games, podcasts and brands that fit my fans, each with a reason |
 | US-3 | As an artist, I get a pitch email per production that I can edit and send myself |
-| US-4 | As a supervisor, I enter a show, film, game or brand and get a ranked shortlist of emerging artists |
+| US-4 | As a supervisor, I enter a show, film, game or brand and get a ranked shortlist of under-the-radar artists |
 | US-5 | As anyone, I watch the agent work step by step and see every Qloo call it made |
 | US-6 | As a judge, I see an eval page comparing Cue with an LLM alone and an LLM with web search |
 
@@ -149,18 +149,20 @@ each traced to a Qloo call.
 ### FR-3 Production matching (US-2)
 
 Run Insights for TV shows, movies, video games, podcasts and brands **in parallel**, with
-`feature.explainability=true`.
+`feature.explainability=true`, once per popularity section (big screen, prime time, indie gems;
+[DESIGN.md](DESIGN.md) §6).
 
-*Acceptance:* the five calls start together, not one after another (visible in the trace); each
-result carries Qloo's explanation.
+*Acceptance:* the calls start together, not one after another (visible in the trace); each result
+carries Qloo's explanation; every section that Qloo has data for shows its own matches.
 
 ### FR-4 Fit check (US-2)
 
-For the top candidates, run Compare (artist vs production) and Trending (is the production rising).
+For each production type, run the same Insights call for a comparison group of similar artists,
+and score every production by **lift**: how much more this artist's fans like it than the group's
+fans do ([DESIGN.md](DESIGN.md) §6). Add the demographic match between fans and viewers.
 
-*Acceptance:* every ranked production has a compare result and a trend value with its as-of date,
-or is marked `insufficient_data`. Wherever trend is shown, it is labelled "as of July 2026" (the
-latest week in Qloo's hackathon data), never as current.
+*Acceptance:* every ranked production has a lift value, or is marked `insufficient_data`. Trend is
+not shown: Qloo's hackathon trending data stopped changing around Dec 2025 (Q-9).
 
 ### FR-5 Fit score (US-2, US-4)
 
@@ -188,9 +190,13 @@ a send action.
 ### FR-8 Supervisor mode (US-4)
 
 Same pipeline, reversed: resolve the production, profile its audience, run Insights for artists
-with a popularity cap so results are emerging artists.
+with a popularity cap (0.80, widened to 0.85 when fewer than 8 come back) so results are
+**under-the-radar** artists: lesser-known, not necessarily new. Qloo has no birth, death or debut
+dates for artists, so the cap alone also returns veterans and late artists; Cue never calls the
+shortlist "emerging" or "new".
 
-*Acceptance:* no artist above the popularity cap appears; results reuse the same scorer and guard.
+*Acceptance:* no artist above the popularity cap appears; results reuse the same scorer and guard;
+no shortlist text calls an artist new, emerging, up-and-coming or rising.
 
 ### FR-9 Trace and eval (US-5, US-6)
 
@@ -229,7 +235,8 @@ limiter and retries.
 - No automatic sending (FR-7)
 - Inputs are data, never instructions; prompt injection in an artist name or brief can't change the
   agent's tools or rules
-- Popularity cap in supervisor mode keeps the product honest about "emerging"
+- Popularity cap in supervisor mode keeps famous artists out; the "under-the-radar" label keeps the
+  product honest that lesser-known isn't the same as new
 
 ## 12. Legal and data constraints
 
@@ -243,7 +250,7 @@ limiter and retries.
 |---|---|
 | Hit rate in top 10, Cue vs LLM alone | Cue clearly higher |
 | Made-up names in Cue output | 0% |
-| Share of emerging artists in supervisor mode | 100% under the popularity cap |
+| Share of under-the-radar artists in supervisor mode | 100% under the popularity cap |
 | Full run time | Under 60 s, cached under 5 s |
 | Live demo uptime through judging | No outages |
 
@@ -257,9 +264,25 @@ mode end to end by 25 Oct, supervisor mode and eval by 28 Oct, submitted by 30 O
 | # | Question | Owner | Blocks |
 |---|---|---|---|
 | Q-4 | Where do we get ~300 known placements, and are we allowed to use that source? | Swara | WU-11 |
-| Q-7 | The fit formula's two biggest inputs are weak: Insights affinity barely varies (top TV results all 0.945–0.956), Compare finds no shared tags between an artist and a show, and the same popular shows (*Aarya*, *Criminal Justice*) top every Indian artist's list. Lift over a comparison group of similar artists is the leading option. See [DESIGN.md](DESIGN.md) §6 | Vedant | WU-04 |
 | Q-8 | Onboarding needs lookups by external ID. Add `find_by_spotify(spotify_id)` and `find_by_musicbrainz(mbid)`, both `-> list[EntityRef]`, to the contract (§7.1)? | all three | WU-01, FR-1 |
-| Q-9 | Is there trending data for artists at all? Prateek Kuhad's came back empty while a TV show's didn't | Vedant | WU-04 |
+
+### Answered — 24 Oct 2026, from live API calls
+
+**Q-7 — the fit score: lift inside three popularity sections.** Productions are split by their own
+popularity into big screen (≥ 0.90), prime time (0.70–0.90) and indie gems (< 0.70), each its own
+Insights call. Inside a section they rank by `0.70 × lift_rank + 0.30 × audience`, where lift is
+how much more this artist's fans like the production than fans of four similar artists do. For
+Prateek Kuhad this drops *Panchayat* and *Kota Factory* (everyone's shows) and lifts
+*Masaba Masaba*, *Decoupled* and *Ray*. One combined call for the comparison group gives nearly the
+same order as four separate calls. Compare overlap and reverse affinity are dropped: the first is
+empty between an artist and a show, the second barely varies. Full rule in
+[DESIGN.md](DESIGN.md) §6.
+
+**Q-9 — artist trending: it exists, but it is frozen.** Artist series come back only when the window
+is longer than about 13 weeks, which is why it looked empty. But for every entity checked, the
+weekly rank and percentile have not changed since about Dec 2025 (*Panchayat* last moved on
+19 Dec 2025; Prateek Kuhad never moved). So trend can't say what is rising, and Cue doesn't use or
+show it. The `trending` tool still works if Qloo's data starts moving.
 
 ### Answered — 22 Oct 2026, agreed by the team
 

@@ -11,8 +11,8 @@ cannot see each other, so everything we need to stay consistent lives here or is
 One engine, two directions:
 
 - **Artist mode:** an artist goes in, a ranked list of productions and a pitch kit come out.
-- **Supervisor mode:** a show, film, game or brand goes in, a ranked shortlist of emerging artists
-  comes out.
+- **Supervisor mode:** a show, film, game or brand goes in, a ranked shortlist of under-the-radar
+  artists comes out.
 
 Both modes share one harness, one set of Qloo tools and one scoring function. Qloo is the engine:
 if a feature would work the same without Qloo, we are building the wrong thing.

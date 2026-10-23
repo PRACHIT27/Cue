@@ -76,10 +76,12 @@ flowchart TB
   ignored). Search's first hit is never taken on its own.
 - **Search type by role:** singers, bands, composers and producers search `urn:entity:artist`;
   lyricists search `urn:entity:person`, then `urn:entity:author`.
-- **MusicBrainz** is used only to turn a Spotify link into an MBID. It lives in its own small
-  helper outside the Qloo client (`cue/identity/musicbrainz.py`), allows about 1 request per
-  second, needs a descriptive `User-Agent`, and its results are cached like name lookups. Taste
-  data always comes from Qloo.
+- **MusicBrainz** has two jobs, both in `cue/identity/musicbrainz.py`, outside the Qloo client:
+  turning a Spotify link into an MBID (`find_mbid_by_spotify`, onboarding), and checking whether a
+  shortlisted artist has died or disbanded (`life_span`, supervisor mode). One shared client
+  allows 1 request per second across the whole app, sends a descriptive `User-Agent`, caches for
+  30 days and makes no call in `DEMO_MODE`. Any failure means "unknown", never "ended". Taste data
+  always comes from Qloo.
 - **Route 3 signals:** sounds-like and song artists go in `signal.interests.entities`, genre tags in
   `signal.interests.tags`. Explainability then says which input drove each match.
 - **Saved link:** the confirmed user-to-entity mapping lives in Supabase. It holds Qloo IDs we chose,
@@ -235,17 +237,31 @@ Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against t
 
 ## 4. Harness
 
-- **Planner** (Claude Haiku 5.5, effort `low`, structured output): reads the input and returns the
-  full list of Qloo calls for the run, with dependencies. Doing this once lets independent calls run
-  at the same time.
+- **Planner** (Claude Haiku 5.5, effort `low`, structured output, `cue/agents/planner/`): makes
+  **decisions**, and code turns them into calls. It picks production types, popularity sections,
+  up to 3 brief phrases to look up as tags, and whether to use lift, each from a fixed list in the
+  output schema, plus a one-line note shown in the trace. Code builds the calls (profile,
+  comparison group, one Insights call per type and section), so parameters are always valid.
+  **Round 2:** the planner sees a short summary of round 1's results (counts per type and section)
+  and may add types or sections that came back thin, or stop. At most 2 rounds. If the model
+  fails or the budget is spent, a default plan runs instead. Brief tags are only used for a
+  production type when they come from its own vocabulary (`genre:media`/`keyword:media`, or
+  `genre:brand`), never music tags
+- **Model calls** go through `cue/agents/common/llm.py` only: structured output, a cache keyed by
+  model, `PROMPT_VERSION` and input (free on repeat, required in `DEMO_MODE`), and a spend ledger
+  that refuses any call whose worst-case cost would pass `LLM_BUDGET_USD`
 - **Param checker** (`cue/qloo/params.py`): a table of which parameters each `filter.type` accepts,
   copied from Qloo's Entity Type Parameter Guide. Any call with an unsupported parameter is rejected
   and sent back to the planner with the reason. Max two replans.
 - **Executor:** runs calls as `asyncio` tasks in dependency order; independent calls run in
-  parallel. Per-call timeout 10 s. Max 40 Qloo calls per run.
+  parallel. Per-call timeout 20 s (it includes time waiting for the rate limiter). Max 40 Qloo calls per run.
 - **Scorer:** see §6.
 - **Grounding guard:** see §5.
-- **Writer** (Claude Opus 5.5, structured output): turns scored, grounded matches into a pitch kit or
+- **Writer** (`cue/agents/writer/`, `LLM_LARGE_MODEL`; Haiku 5.5 during development): sees each
+  pick under a short alias (`{{S-1}}`), and the output schema only allows those aliases, so it can't
+  name a production it wasn't given. It gets the brief, plain facts per pick and style rules (no
+  jargon, vary each email, call a film a film). Code maps aliases back to Qloo IDs, attaches the
+  scores and runs the guards. Turns scored, grounded matches into a pitch kit or
   brief. Gets only our checked data, never raw text from elsewhere.
 - **Run events:** every step and Qloo call emits an event (§7.3), streamed to the website over
   server-sent events and stored with the run.
@@ -261,7 +277,7 @@ Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against t
 | Pitch-claim guard | After the writer | "Your song was featured in…" without data showing it |
 | Score lock | Writer output schema | The model can't output a score; scores are joined in by code |
 | Input handling | Planner and writer | Artist names and briefs are data in a delimited field, never instructions |
-| Popularity cap | Supervisor mode | Famous artists labelled as emerging |
+| Popularity cap | Supervisor mode | Famous artists on an under-the-radar shortlist |
 
 **Caching** (private, server-side only; Qloo allows this with no time limit)
 
@@ -288,41 +304,49 @@ Start with an in-memory cache behind the `Cache` interface; switch to Redis (Ups
 
 ## 6. Fit score
 
-Plain code in `cue/scoring/fit.py`. Inputs are normalised to 0–1 by the Qloo tools:
+Plain code in `cue/scoring/`. Decided 24 Oct 2026 (PRD Q-7): **lift, inside three popularity
+sections.**
 
-| Input | From |
-|---|---|
-| `affinity` | Insights result's affinity for the candidate |
-| `overlap` | Compare result between the two entities |
-| `trend` | The candidate's latest week from `trending`, scaled to 0–1 (0 if no data) |
-| `audience` | How closely the candidate's age and gender lean matches the source's |
+**Sections.** A production's own popularity puts it in a section. Each section is its own Insights
+call with `filter.popularity.min/max`, so smaller productions always reach the results instead of
+being crowded out by the famous ones.
+
+| Section | Popularity | Meaning for the artist |
+|---|---|---|
+| `big_screen` | ≥ 0.90 | Famous; a long shot |
+| `prime_time` | 0.70 – 0.90 | Mid-size; realistic |
+| `indie_gems` | < 0.70 | Smaller; the best chance |
+
+**Lift** is the main signal: how much more *this* artist's fans like a production than fans of
+similar artists do. Raw affinity is nearly flat, and the same popular shows top every Indian
+artist's list; lift removes those. Live check (24 Oct, Prateek Kuhad, TV): *Panchayat*,
+*Delhi Crime* and *Kota Factory* (lift ≈ 0) drop out; *Masaba Masaba*, *Decoupled* and *Ray* rise;
+crime thrillers (*Mirzapur*, *Breathe*) fall to the bottom.
 
 ```
-fit = 0.50 * affinity + 0.30 * overlap + 0.10 * audience + 0.10 * trend
+lift(p)     = affinity of the artist's fans for p − affinity of the comparison group for p
+group       = one Insights call signalled with the 4 artists Qloo finds most similar to the artist
+              (for a stand-in profile: similar to its sounds-like artists), per production type
+missing p in the group's results → the group's lowest affinity in that call
 ```
 
-- **Known problem (PRD Q-7):** live calls show `overlap` is usually empty for artist vs production,
-  and `affinity` is nearly flat. Under the rule below, most matches would become
-  `insufficient_data`. On top of that, the same popular shows top every Indian artist's list (§3).
-  Options for WU-04, strongest first:
-  - **Lift over a comparison group:** run the same Insights query for a few similar artists and
-    score each production by how much more *this* artist's fans like it than the group's fans do.
-    Pushes everyone's shows (*Aarya*) down and this artist's own (*Kohrra*, *Rocket Boys*) up, and
-    spreads the scores apart. Pitch line: "your fans over-index on *Kohrra* compared with similar
-    artists". Costs a few cached calls per run
-  - **Reverse affinity** in place of `overlap`: how much the production's fans like this artist
-    (`filter.results.entities`, one call per production)
-  - **Rank position** in place of raw affinity
-  - **`filter.popularity.max` on productions**, as for games, to surface smaller, more realistic
-    placements
-  - **More weight on `audience`**, now that demographics works for artist entries
+Inside each section, rank by **match**:
 
-  Decide before WU-04 and log it in VERSION.md
-- Missing `affinity` or `overlap` gives `insufficient_data`, not a number
+```
+lift_rank = position by lift within the section, rescaled to 0–1 (best 1, worst 0; ties share a rank)
+audience  = 1 − mean absolute difference between the two age and gender leans, scaled to 0–1
+match     = 0.70 × lift_rank + 0.30 × audience
+```
+
+- `audience` missing → `match = lift_rank` (its weight is shared, never counted as 0)
+- No lift possible (no comparison group, or the production has no affinity) → `insufficient_data`
+- A section with one production gives it `lift_rank = 1`
+- `lift`, `lift_rank`, `audience` and `section` go in `FitScore.inputs`; `Match.overlap` stays
+  `None`. No contract change
 - Weights are a starting point, tuned only on the eval's dev split, never on the test split
-- Which Qloo response fields feed each input is settled in WU-01 and logged in VERSION.md
-- `trend` is only as recent as Qloo's data, which ends about 30 Jul 2026. Every place that shows
-  it, in the UI, the pitch kit and the brief, labels it "as of July 2026", never as current
+- **Dropped:** Compare's shared tags (empty between an artist and a production), reverse affinity
+  (flat, 0.91–0.94 for every show) and **trend** (PRD Q-9: Qloo's trending data stopped changing
+  around Dec 2025, so it can't say what is rising)
 
 ## 7. The agreed contract
 
@@ -388,7 +412,7 @@ Curated by hand or from sources whose terms allow it (PRD Q-4).
 |---|---|
 | Hit rate in top 10 | Is the known answer in the system's top 10? Both directions |
 | Made-up names | Share of suggested names that don't resolve via Qloo Search |
-| Emerging share | Share of suggested artists under the popularity cap |
+| Under-the-radar share | Share of suggested artists under the popularity cap |
 | Consistency | Overlap of top 10 across three runs of the same input |
 | Time and cost | Per run, median and slowest |
 
