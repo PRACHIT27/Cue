@@ -235,14 +235,24 @@ Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against t
 
 ## 4. Harness
 
-- **Planner** (Claude Haiku 5.5, effort `low`, structured output): reads the input and returns the
-  full list of Qloo calls for the run, with dependencies. Doing this once lets independent calls run
-  at the same time.
+- **Planner** (Claude Haiku 5.5, effort `low`, structured output, `cue/agents/planner/`): makes
+  **decisions**, and code turns them into calls. It picks production types, popularity sections,
+  up to 3 brief phrases to look up as tags, and whether to use lift, each from a fixed list in the
+  output schema, plus a one-line note shown in the trace. Code builds the calls (profile,
+  comparison group, one Insights call per type and section), so parameters are always valid.
+  **Round 2:** the planner sees a short summary of round 1's results (counts per type and section)
+  and may add types or sections that came back thin, or stop. At most 2 rounds. If the model
+  fails or the budget is spent, a default plan runs instead. Brief tags are only used for a
+  production type when they come from its own vocabulary (`genre:media`/`keyword:media`, or
+  `genre:brand`), never music tags
+- **Model calls** go through `cue/agents/common/llm.py` only: structured output, a cache keyed by
+  model, `PROMPT_VERSION` and input (free on repeat, required in `DEMO_MODE`), and a spend ledger
+  that refuses any call whose worst-case cost would pass `LLM_BUDGET_USD`
 - **Param checker** (`cue/qloo/params.py`): a table of which parameters each `filter.type` accepts,
   copied from Qloo's Entity Type Parameter Guide. Any call with an unsupported parameter is rejected
   and sent back to the planner with the reason. Max two replans.
 - **Executor:** runs calls as `asyncio` tasks in dependency order; independent calls run in
-  parallel. Per-call timeout 10 s. Max 40 Qloo calls per run.
+  parallel. Per-call timeout 20 s (it includes time waiting for the rate limiter). Max 40 Qloo calls per run.
 - **Scorer:** see §6.
 - **Grounding guard:** see §5.
 - **Writer** (Claude Opus 5.5, structured output): turns scored, grounded matches into a pitch kit or

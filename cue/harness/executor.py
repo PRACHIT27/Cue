@@ -8,7 +8,7 @@ from typing import Any, Awaitable, Callable, Literal, Mapping
 from cue.harness.events import RunEvents
 from cue.harness.plan import Plan, PlannedCall, Ref
 
-CALL_TIMEOUT_S = 10.0
+CALL_TIMEOUT_S = 20.0
 CallStatus = Literal["ok", "error", "skipped"]
 Tool = Callable[..., Awaitable[Any]]
 

@@ -31,7 +31,7 @@ def _params(request: InsightsRequest) -> dict[str, Any]:
         params["feature.explainability"] = True
         params["take"] = request.take
         popularity_max = request.popularity_max
-        if popularity_max is None:
+        if popularity_max is None and request.popularity_min is None:
             popularity_max = DEFAULT_POPULARITY_MAX.get(request.filter_type)
         if request.popularity_min is not None:
             params["filter.popularity.min"] = request.popularity_min

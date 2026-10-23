@@ -17,6 +17,25 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.4.0 — 24 Oct 2026 — Vedant
+
+MINOR: WU-02 planner, WU-03 executor and WU-05 guards; the planner design changed.
+- **DESIGN.md §4:** the planner outputs decisions (production types, sections, brief tags, lift
+  on or off, a note), not raw calls; code builds the calls. It gets a second round after seeing a
+  summary of the first. All model calls go through `cue/agents/common/llm.py`, which caches by
+  `PROMPT_VERSION` and refuses calls that could pass `LLM_BUDGET_USD`.
+- **New setting:** `LLM_BUDGET_USD` in `.env` (and Secret Manager). With it unset, no paid call is made.
+- `anthropic>=2.1,<3` added to `requirements.txt`.
+- Executor timeout is 20 s per call: with ~25 calls a run, time queued behind the rate limiter was
+  hitting 10 s.
+- Fixed: the default games cap (0.90) no longer clashes with the big-screen section's 0.90 floor.
+
+Action required:
+- Prachit: set `LLM_BUDGET_USD` with the deploy key. Run events now include planner steps
+  (`step="planner"`, with `note`) for the trace panel.
+- All: Qloo returns adult titles (one podcast in a live run). A content filter is needed before the
+  writer can pitch anything; Vedant adds it with WU-06.
+
 ## v1.3.0 — 24 Oct 2026 — Vedant
 
 MINOR: PRD Q-7 and Q-9 settled from live calls; the fit score is redefined.

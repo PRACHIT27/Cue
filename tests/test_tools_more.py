@@ -185,3 +185,9 @@ def test_lookups():
     audience_types = FakeClient({"results": {"audience_types": [{"type": "urn:audience:leisure"}]}})
     assert run(audience_types, get_audience_types) == ["urn:audience:leisure"]
     assert audience_types.calls[0][0] == AUDIENCE_TYPES
+
+
+def test_a_section_floor_turns_off_the_default_game_cap():
+    client = FakeClient({"results": {"entities": []}})
+    run(client, lambda: insights(InsightsRequest(filter_type="urn:entity:videogame", signal_entities=("A-1",), popularity_min=0.9)))
+    assert "filter.popularity.max" not in client.calls[0][1]
