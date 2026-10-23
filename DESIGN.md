@@ -255,7 +255,11 @@ Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against t
   parallel. Per-call timeout 20 s (it includes time waiting for the rate limiter). Max 40 Qloo calls per run.
 - **Scorer:** see §6.
 - **Grounding guard:** see §5.
-- **Writer** (Claude Opus 5.5, structured output): turns scored, grounded matches into a pitch kit or
+- **Writer** (`cue/agents/writer/`, `LLM_LARGE_MODEL`; Haiku 5.5 during development): sees each
+  pick under a short alias (`{{S-1}}`), and the output schema only allows those aliases, so it can't
+  name a production it wasn't given. It gets the brief, plain facts per pick and style rules (no
+  jargon, vary each email, call a film a film). Code maps aliases back to Qloo IDs, attaches the
+  scores and runs the guards. Turns scored, grounded matches into a pitch kit or
   brief. Gets only our checked data, never raw text from elsewhere.
 - **Run events:** every step and Qloo call emits an event (§7.3), streamed to the website over
   server-sent events and stored with the run.

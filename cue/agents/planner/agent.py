@@ -41,7 +41,7 @@ async def similar_artists(signal_ids: list[str]) -> list[str]:
 async def insights_group(production_type: str, group_ids: list[str]) -> InsightsResult:
     if not group_ids:
         raise LLMError("no similar artists to compare with")
-    return await insights(InsightsRequest(entity(production_type), tuple(group_ids), take=GROUP_TAKE))
+    return await insights(InsightsRequest(entity(production_type), tuple(group_ids), popularity_min=0.0, take=GROUP_TAKE))
 
 
 def _first_fitting_tag(found: list[TagRef], production_type: str) -> str | None:

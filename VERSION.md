@@ -17,6 +17,25 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.4.1 — 24 Oct 2026 — Vedant
+
+WU-06 writer and the artist run end to end (`cue/agents/artist_run.py`).
+- One live run for Prateek Kuhad with the brief "acoustic songs for a monsoon romance scene":
+  109 matches scored, 9 pitches (3 per section), about 28 s, $0.0017 of Claude on Haiku.
+- **Content filter** (`cue/guards/content.py`): drops candidates whose titles contain explicit
+  words, before scoring. It only checks titles; a tag-based check would be stronger.
+- **Fixes from the live runs:** Insights rows carry the real type in `subtype` (`type` is just
+  `urn:entity`), which broke type labels and the per-type limit. Comparison-group calls now set no
+  popularity cap, because the default games cap hid mega-games from the group and inflated their
+  lift. The planner now leaves out production types a brief rules out (no shooting games for a
+  monsoon romance).
+- DESIGN.md §4: the writer's aliases, schema and style rules.
+
+Action required:
+- Prachit: `run_artist(signal_ids, artist_name, events, brief=, basis=)` is the entry point for
+  `POST /runs` in artist mode. Pass `RunEvents(run_id, sink)` and the client's `sink=events.qloo_sink`
+  so every event lands in one stream.
+
 ## v1.4.0 — 24 Oct 2026 — Vedant
 
 MINOR: WU-02 planner, WU-03 executor and WU-05 guards; the planner design changed.

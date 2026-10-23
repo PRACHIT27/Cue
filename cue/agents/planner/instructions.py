@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-PROMPT_VERSION = "planner-2026-10-24-1"
+PROMPT_VERSION = "planner-2026-10-24-2"
 
 PRODUCTION_TYPES = ["tv_show", "movie", "videogame", "podcast", "brand"]
 SECTIONS = ["big_screen", "prime_time", "indie_gems"]
@@ -14,7 +14,9 @@ You don't call Qloo yourself. You choose what to look up, and code builds and ru
 Your choices:
 - production_types: which kinds of production to search, from tv_show, movie, videogame,
   podcast, brand. Choose the ones that suit the request. If unsure, pick tv_show, movie,
-  videogame and podcast.
+  videogame and podcast. When the brief describes a scene, a mood or a story, choose only the
+  types where that could really appear: a monsoon romance scene belongs in films and TV, not in
+  a shooting game.
 - sections: which popularity sections to search. big_screen is famous productions, prime_time is
   mid-size, indie_gems is smaller ones. An emerging artist usually wants all three.
 - brief_tags: up to 3 short taste phrases from the user's brief, such as "acoustic" or

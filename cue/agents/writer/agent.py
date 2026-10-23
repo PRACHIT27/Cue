@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import Any, Awaitable, Callable
+
+from cue.agents.common.llm import _env, structured
+from cue.agents.writer import instructions
+from cue.agents.writer.guardrail import check_pitches
+from cue.guards import Drop
+from cue.records import FitScore, Match, PitchItem
+
+TYPE_LABELS = {
+    "urn:entity:tv_show": "TV show",
+    "urn:entity:movie": "film",
+    "urn:entity:videogame": "video game",
+    "urn:entity:podcast": "podcast",
+    "urn:entity:brand": "brand",
+}
+SECTION_LABELS = {"big_screen": "famous", "prime_time": "mid-size", "indie_gems": "smaller"}
+LLMCall = Callable[..., Awaitable[dict[str, Any]]]
+
+
+@dataclass(frozen=True)
+class ArtistFacts:
+    id: str
+    name: str
+    basis: str
+    fans: str
+
+
+def _match_line(alias: str, match: Match, fit: FitScore, best_in_section: bool) -> str:
+    facts = [f"{TYPE_LABELS.get(match.candidate.type, 'production')}, {SECTION_LABELS.get(fit.inputs.get('section'), '')}"]
+    lift = fit.inputs.get("lift")
+    if lift is not None and lift > 0:
+        facts.append("its audience over-indexes on fans of this artist compared with fans of similar artists" + (" (the strongest in its group)" if best_in_section else ""))
+    audience = fit.inputs.get("audience")
+    if audience is not None:
+        facts.append(f"age and gender of its audience match the artist's listeners {round(audience * 100)}%")
+    return f"- {{{{{alias}}}}} {match.candidate.name}: " + "; ".join(facts)
+
+
+def build_prompt(artist: ArtistFacts, picks: list[tuple[Match, FitScore]], brief: str = "") -> tuple[str, dict[str, str], dict[str, str]]:
+    aliases = {"A-1": artist.id}
+    alias_names = {"A-1": artist.name}
+    lines = []
+    for index, (match, fit) in enumerate(picks, start=1):
+        alias = f"S-{index}"
+        aliases[alias] = match.candidate.id
+        alias_names[alias] = match.candidate.name
+        lines.append(_match_line(alias, match, fit, fit.inputs.get("lift_rank") == 1.0))
+    user = (
+        f"<artist>\n{{{{A-1}}}} {artist.name}\nprofile_basis: {artist.basis}\nlisteners: {artist.fans}\n</artist>\n"
+        f"<brief>\n{brief or '(none)'}\n</brief>\n"
+        f"<matches>\n" + "\n".join(lines) + "\n</matches>\nWrite one pitch per match."
+    )
+    return user, aliases, alias_names
+
+
+@dataclass(frozen=True)
+class WriterOutcome:
+    items: tuple[PitchItem, ...]
+    drops: tuple[Drop, ...]
+
+
+async def write_pitches(artist: ArtistFacts, picks: list[tuple[Match, FitScore]], llm: LLMCall = structured, brief: str = "") -> WriterOutcome:
+    if not picks:
+        return WriterOutcome((), ())
+    user, aliases, alias_names = build_prompt(artist, picks, brief)
+    production_aliases = [a for a in aliases if a.startswith("S-")]
+    raw = await llm(
+        label="writer",
+        system=instructions.SYSTEM,
+        user=user,
+        schema=instructions.schema(production_aliases),
+        prompt_version=instructions.PROMPT_VERSION,
+        model=_env("LLM_LARGE_MODEL", "claude-haiku-5-5"),
+        max_tokens=6000,
+    )
+    by_alias = {f"S-{i}": pair for i, pair in enumerate(picks, start=1)}
+    drafts: list[PitchItem] = []
+    drops: list[Drop] = []
+    for entry in raw.get("items") or []:
+        alias = entry.get("candidate_id")
+        if alias not in by_alias:
+            drops.append(Drop("writer", f"pitch for unknown placeholder {alias}", str(alias)))
+            continue
+        match, fit = by_alias[alias]
+        drafts.append(
+            PitchItem(
+                candidate=replace(match.candidate, id=alias),
+                fit=fit,
+                reason=str(entry.get("reason") or ""),
+                email_subject=str(entry.get("email_subject") or ""),
+                email_body=str(entry.get("email_body") or ""),
+            )
+        )
+    kept, guard_drops = check_pitches(drafts, aliases, alias_names, artist.name)
+    return WriterOutcome(tuple(kept), tuple(drops + guard_drops))

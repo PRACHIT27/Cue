@@ -128,3 +128,8 @@ def test_get_entities_keeps_order_and_drops_unknown_ids():
 def test_tools_refuse_to_run_without_a_client():
     with pytest.raises(RuntimeError, match="use_client"):
         current_client()
+
+
+def test_insights_rows_use_subtype_when_type_is_generic():
+    ref = entity_ref({"entity_id": "F-1", "name": "Fake", "type": "urn:entity", "subtype": "urn:entity:videogame"})
+    assert ref.type == "urn:entity:videogame"

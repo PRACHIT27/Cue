@@ -17,6 +17,9 @@ def entity_type(raw: Mapping[str, Any]) -> str:
     types = raw.get("types") or []
     if types:
         return str(types[0])
+    subtype = str(raw.get("subtype") or "")
+    if subtype.startswith("urn:entity:"):
+        return subtype
     for key in ("type", "subtype"):
         if raw.get(key):
             return str(raw[key])
