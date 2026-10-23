@@ -10,6 +10,7 @@ from cue.tools.records import TrendSeries, TrendWeek
 
 DATA_ENDS = date(2026, 7, 31)
 WEEKS = 12
+FETCH_WEEKS = 16
 PERCENTILE_SWING = 0.10
 
 
@@ -42,7 +43,7 @@ def _week(raw: dict) -> TrendWeek | None:
 
 
 async def trending(entity_id: str, entity_type: str) -> TrendSeries:
-    start = DATA_ENDS - timedelta(weeks=WEEKS)
+    start = DATA_ENDS - timedelta(weeks=FETCH_WEEKS)
     data = await qloo_get(
         TRENDING,
         {
@@ -50,7 +51,7 @@ async def trending(entity_id: str, entity_type: str) -> TrendSeries:
             "signal.interests.entities": entity_id,
             "filter.start_date": start.isoformat(),
             "filter.end_date": DATA_ENDS.isoformat(),
-            "take": WEEKS + 2,
+            "take": FETCH_WEEKS + 4,
         },
     )
     weeks = sorted((w for w in map(_week, results_list(data, "trending")) if w), key=lambda w: w.week_start)

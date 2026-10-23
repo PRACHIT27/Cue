@@ -145,7 +145,7 @@ def test_trending_asks_for_twelve_weeks_up_to_the_data_end():
     endpoint, params = client.calls[0]
     assert endpoint == TRENDING
     assert params["filter.end_date"] == DATA_ENDS.isoformat()
-    assert params["filter.start_date"] == "2026-05-08"
+    assert params["filter.start_date"] == "2026-04-10"
     assert [w.week_start for w in series.weeks] == [date(2026, 7, 20), date(2026, 7, 27)]
     assert series.as_of == date(2026, 7, 27) and series.weeks[-1].rank == 10
 

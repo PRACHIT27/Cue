@@ -34,7 +34,11 @@ Every tool ran live once (15 calls, 0 errors); tests use fake values only.
   `InsightsResult.demographics`, `.heatmap` and `.tags` instead of `.items`.
 - **`compare`:** returns shared tags plus each side's own tags (`a_tags`, `b_tags`), so WU-04 can
   still work with them when `shared` is empty for artist vs show.
-- **`trending`:** asks for the 12 weeks up to 31 Jul 2026 (`DATA_ENDS` in `cue/tools/trending.py`).
+- **`trending`:** fetches 16 weeks up to 31 Jul 2026 (`DATA_ENDS` in `cue/tools/trending.py`) and
+  keeps the latest 12. A window shorter than about 13 weeks returns nothing for artists, which is
+  why artist trending looked empty (PRD Q-9). **But the data is frozen:** every week since about
+  Dec 2025 repeats the same rank and percentile, for artists and shows alike, so `trend_score` is
+  0.5 for everything. See PRD Q-9.
   **Which field feeds `trend`:** `trend_score(series)` uses `population_percentile`, the change from
   the first to the last week, mapped so no change is 0.5 and a swing of ±0.10 or more is 1 or 0.
   It returns `None`, not 0, when there are fewer than two weeks; WU-04 decides how to treat that.
