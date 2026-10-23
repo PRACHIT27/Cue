@@ -137,3 +137,13 @@ def test_run_artist_end_to_end_with_fakes():
     kinds = [e["kind"] for e in events]
     assert kinds[-1] == "result" and "guard_drop" in kinds
     assert all(e["run_id"] == "r_e2e" for e in events)
+
+
+def test_writer_failure_returns_no_pitches_instead_of_crashing():
+    from cue.agents.common.llm import LLMError
+
+    async def broken(**kwargs):
+        raise LLMError("writer: ran out of max_tokens before finishing")
+
+    out = asyncio.run(write_pitches(ARTIST, [pick("REAL-1")], llm=broken))
+    assert out.items == () and "no pitches written" in out.drops[0].reason

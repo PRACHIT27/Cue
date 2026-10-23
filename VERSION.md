@@ -17,6 +17,28 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.4.2 — 24 Oct 2026 — Vedant
+
+WU-08 supervisor mode (`cue/agents/supervisor_run.py`) and a sturdier writer.
+- `run_supervisor(production_id, production_name, production_type, events, brief=)`: artists
+  liked by the production's audience, capped at popularity 0.80 (PRD Q-5). If fewer than 8 come
+  back, the cap widens to 0.85 and a `step="widen"` event says so. Lift compares with 4 similar
+  productions' audiences, asked about exactly our candidates (`filter.results.entities`), so every
+  artist gets a real comparison instead of a guessed baseline. Each shortlisted artist gets a
+  Spotify link in `FitScore.inputs["spotify_url"]`. The writer returns a `Brief`.
+- Live check, *Bandish Bandits*: 30 candidates, all ≤ 0.80, 8 on the shortlist, about 26 s,
+  $0.002 of Claude on Haiku.
+- **Writer failures no longer crash a run:** the run returns its scored matches with no text, and a
+  `guard_drop` saying why. Writer `max_tokens` is 8000, because Haiku's thinking shares the budget.
+- **Known problem: "emerging" isn't "new".** The 0.80 cap returns veteran and late classical
+  artists (Bhimsen Joshi, Mehdi Hassan), and Qloo carries no birth, death or debut dates for
+  artists. Needs a decision; see the PR.
+
+Action required:
+- Prachit: `run_supervisor(...)` is the entry point for `POST /runs` in supervisor mode; show
+  `spotify_url` as a Listen link.
+- All: decide how supervisor mode handles veteran artists before the demo.
+
 ## v1.4.1 — 24 Oct 2026 — Vedant
 
 WU-06 writer and the artist run end to end (`cue/agents/artist_run.py`).

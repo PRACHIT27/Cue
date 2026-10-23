@@ -1,0 +1,159 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from typing import Any, Awaitable, Callable, Mapping
+
+from cue.agents.common.llm import structured
+from cue.agents.writer import write_brief
+from cue.guards import Drop
+from cue.guards.content import remove_explicit
+from cue.harness.events import RunEvents
+from cue.harness.executor import CallResult, execute
+from cue.harness.plan import Plan, PlannedCall
+from cue.records import Brief, FitScore, Match
+from cue.scoring.fit import score_matches
+from cue.scoring.lift import audience_similarity, lift_scores
+from cue.tools import get_entities, insights
+from cue.tools.records import Demographics, InsightsItem, InsightsRequest, InsightsResult
+
+ARTIST = "urn:entity:artist"
+EMERGING_CAP = 0.80
+WIDENED_CAP = 0.85
+MIN_ARTISTS = 8
+ARTIST_TAKE = 30
+GROUP_SIZE = 4
+GROUP_TAKE = 50
+SHORTLIST = 8
+LLMCall = Callable[..., Awaitable[dict[str, Any]]]
+
+
+async def similar_productions(production_type: str, production_id: str) -> list[str]:
+    result = await insights(InsightsRequest(production_type, (production_id,), take=GROUP_SIZE + 2))
+    return [i.candidate.id for i in result.items if i.candidate.id != production_id][:GROUP_SIZE]
+
+
+async def emerging_artists(signal_ids: list[str], cap: float) -> InsightsResult:
+    return await insights(InsightsRequest(ARTIST, tuple(signal_ids), popularity_max=cap, take=ARTIST_TAKE))
+
+
+async def artists_group(group_ids: list[str], candidates: InsightsResult) -> InsightsResult:
+    if not group_ids:
+        raise ValueError("no similar productions to compare with")
+    ids = [i.candidate.id for i in candidates.items]
+    if not ids:
+        return InsightsResult(InsightsRequest(ARTIST))
+    return await insights(
+        InsightsRequest(ARTIST, tuple(group_ids), popularity_min=0.0, filters={"filter.results.entities": ids}, take=min(len(ids), GROUP_TAKE))
+    )
+
+
+async def demographics(ids: list[str]) -> InsightsResult:
+    return await insights(InsightsRequest("urn:demographics", tuple(ids)))
+
+
+SUPERVISOR_TOOLS = {
+    "similar_productions": similar_productions,
+    "emerging_artists": emerging_artists,
+    "artists_group": artists_group,
+    "demographics": demographics,
+    "get_entities": get_entities,
+}
+
+
+@dataclass(frozen=True)
+class SupervisorRun:
+    brief: Brief
+    scores: tuple[FitScore, ...]
+    matches: tuple[Match, ...]
+    drops: tuple[Drop, ...]
+    cap: float
+
+
+def _ok(results: Mapping[str, CallResult], call_id: str) -> Any:
+    result = results.get(call_id)
+    return result.value if result is not None and result.status == "ok" else None
+
+
+def _first_block(result: InsightsResult | None, entity_id: str) -> Demographics | None:
+    if result is None:
+        return None
+    return next((d for d in result.demographics if d.entity_id == entity_id and (d.age or d.gender)), None)
+
+
+async def run_supervisor(
+    production_id: str,
+    production_name: str,
+    production_type: str,
+    events: RunEvents,
+    brief: str = "",
+    llm: LLMCall = structured,
+    tools: Mapping[str, Callable[..., Awaitable[Any]]] = SUPERVISOR_TOOLS,
+) -> SupervisorRun:
+    plan = Plan(
+        (
+            PlannedCall("profile", "demographics", {"ids": [production_id]}),
+            PlannedCall("similar", "similar_productions", {"production_type": production_type, "production_id": production_id}),
+            PlannedCall("artists", "emerging_artists", {"signal_ids": [production_id], "cap": EMERGING_CAP}),
+        )
+    )
+    results = await execute(plan, tools, events)
+    cap = EMERGING_CAP
+    found = _ok(results, "artists")
+    if found is None or len(found.items) < MIN_ARTISTS:
+        cap = WIDENED_CAP
+        events.emit(
+            "step_end",
+            step="widen",
+            tool="supervisor",
+            status="ok",
+            note=f"Only {len(found.items) if found else 0} emerging artists under {EMERGING_CAP:.2f}; widened the cap to {WIDENED_CAP:.2f}.",
+        )
+        widened = await execute(Plan((PlannedCall("artists_wide", "emerging_artists", {"signal_ids": [production_id], "cap": WIDENED_CAP}),)), tools, events)
+        found = _ok(widened, "artists_wide") or found
+
+    items: list[InsightsItem] = [i for i in (found.items if found else ()) if i.candidate.popularity <= cap]
+    items, drops = remove_explicit(items)
+    for drop in drops:
+        events.emit("guard_drop", guard=drop.guard, reason=drop.reason, text=drop.text)
+
+    candidate_result = InsightsResult(InsightsRequest(ARTIST), tuple(items))
+    similar_ids = _ok(results, "similar") or []
+    follow_up = []
+    if items:
+        follow_up.append(PlannedCall("audiences", "demographics", {"ids": [i.candidate.id for i in items]}))
+        if similar_ids:
+            follow_up.append(PlannedCall("group", "artists_group", {"group_ids": list(similar_ids), "candidates": candidate_result}))
+    audience_calls = await execute(Plan(tuple(follow_up)), tools, events) if follow_up else {}
+    viewers = _first_block(_ok(results, "profile"), production_id)
+    artist_demo = {d.entity_id: d for d in (_ok(audience_calls, "audiences").demographics if _ok(audience_calls, "audiences") else ())}
+
+    group = _ok(audience_calls, "group") or InsightsResult(InsightsRequest(ARTIST))
+    lifts = lift_scores(candidate_result, group)
+    matches = [
+        Match(production_id, i.candidate, i.affinity, audience=audience_similarity(viewers, artist_demo.get(i.candidate.id)), explanation=i.explanation)
+        for i in items
+    ]
+    scores = score_matches(matches, lifts)
+    by_id = {s.match_id: s for s in scores}
+    ranked = sorted(
+        ((m, by_id[m.match_id]) for m in matches if by_id[m.match_id].status == "ok"),
+        key=lambda p: (-p[1].value, -(p[1].inputs.get("lift") or 0), p[0].candidate.name),
+    )[:SHORTLIST]
+
+    if ranked:
+        links = await execute(Plan((PlannedCall("profiles", "get_entities", {"ids": [m.candidate.id for m, _ in ranked]}),)), tools, events)
+        spotify = {e.ref.id: e.spotify_id for e in (_ok(links, "profiles") or [])}
+        ranked = [
+            (m, replace(f, inputs={**f.inputs, "spotify_url": f"https://open.spotify.com/artist/{spotify[m.candidate.id]}" if spotify.get(m.candidate.id) else None}))
+            for m, f in ranked
+        ]
+
+    events.emit("step_start", step="writer", tool="writer", picks=len(ranked))
+    written = await write_brief(production_id, production_name, production_type, ranked, llm=llm, brief=brief)
+    events.emit("step_end", step="writer", tool="writer", status="ok", artists=len(written.items))
+    for drop in written.drops:
+        events.emit("guard_drop", guard=drop.guard, reason=drop.reason, text=drop.text)
+
+    result = Brief(run_id=events.run_id, production_id=production_id, artists=written.items)
+    events.emit("result", artists=len(result.artists), matches=len(matches), cap=cap)
+    return SupervisorRun(result, tuple(scores), tuple(matches), tuple(drops) + written.drops, cap)
