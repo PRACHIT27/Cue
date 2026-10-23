@@ -17,6 +17,41 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.2.2 — 23 Oct 2026 — Vedant
+
+WU-01: the nine Qloo tools in `cue/tools/`, with the §7.1 signatures, all through the WU-00 client.
+Every tool ran live once (15 calls, 0 errors); tests use fake values only.
+- **Reaching the client:** wrap a run in `with use_client(client, run_id=...)`. Tools pick the
+  client up from a context variable, so the §7.1 signatures stay as agreed.
+- **`find_entity`:** keeps only exact matches after `normalise_name` (case, accents, punctuation,
+  `&`→`and`, leading "the"), checking akas too. For artists it never searches `urn:entity:person`.
+  Results sharing a Spotify or MusicBrainz ID merge into one. `[]` means not found.
+- **`insights`:** always sends `feature.explainability=true`. Each item carries `rank` (affinity is
+  flat, so rank carries more information), Qloo's per-input explanation shares, and
+  `duplicate_ids` when the same title came back more than once. Games default to
+  `filter.popularity.max=0.90`. `InsightsRequest.popularity_min/max` give the three popularity
+  bands. `filter.type` `urn:demographics`, `urn:heatmap` and `urn:tag` fill
+  `InsightsResult.demographics`, `.heatmap` and `.tags` instead of `.items`.
+- **`compare`:** returns shared tags plus each side's own tags (`a_tags`, `b_tags`), so WU-04 can
+  still work with them when `shared` is empty for artist vs show.
+- **`trending`:** fetches 16 weeks up to 31 Jul 2026 (`DATA_ENDS` in `cue/tools/trending.py`) and
+  keeps the latest 12. A window shorter than about 13 weeks returns nothing for artists, which is
+  why artist trending looked empty (PRD Q-9). **But the data is frozen:** every week since about
+  Dec 2025 repeats the same rank and percentile, for artists and shows alike, so `trend_score` is
+  0.5 for everything. See PRD Q-9.
+  **Which field feeds `trend`:** `trend_score(series)` uses `population_percentile`, the change from
+  the first to the last week, mapped so no change is 0.5 and a swing of ±0.10 or more is 1 or 0.
+  It returns `None`, not 0, when there are fewer than two weeks; WU-04 decides how to treat that.
+- `python -m cue.tools.smoke "Artist name"` runs every tool once live and prints a summary. Nothing
+  it receives is saved.
+
+Action required:
+- Prachit: `InsightsResult` and the other tool-only records are in `cue/tools/records.py`; the
+  §7.2 records the website uses (`Match`, `FitScore`, …) come with WU-04.
+- Vedant: settle Q-7 and Q-9 before WU-04. Per v1.2.0, fan profiles use the artist entry's own
+  tags (`get_entities(...)[0].tags`), not raw `urn:tag` results; the harness builds profiles that
+  way in WU-02/WU-03.
+
 ## v1.2.1 — 22 Oct 2026 — Prachit
 
 PATCH: heatmap corrected from a live retry. It needs an area (`filter.location.query`), and only
