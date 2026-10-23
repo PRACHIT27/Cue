@@ -5,7 +5,7 @@ from typing import Any, Awaitable, Callable
 
 from cue.agents.common.llm import LLMError, _env, structured
 from cue.agents.writer import instructions
-from cue.agents.writer.guardrail import check_pitches
+from cue.agents.writer.guardrail import brief_fallback, check_pitches
 from cue.guards import Drop, Known, guard_brief_items
 from cue.guards.claims import strip_newness_claims
 from cue.records import BriefItem, FitScore, Match, PitchItem
@@ -33,11 +33,11 @@ class ArtistFacts:
     fans: str
 
 
-def _match_line(alias: str, match: Match, fit: FitScore, best_in_section: bool) -> str:
+def _match_line(alias: str, match: Match, fit: FitScore) -> str:
     facts = [f"{TYPE_LABELS.get(match.candidate.type, 'production')}, {SECTION_LABELS.get(fit.inputs.get('section'), '')}"]
     lift = fit.inputs.get("lift")
     if lift is not None and lift > 0:
-        facts.append("its audience over-indexes on fans of this artist compared with fans of similar artists" + (" (the strongest in its group)" if best_in_section else ""))
+        facts.append("people who watch or play it like this artist's kind of music more than fans of similar artists do")
     audience = fit.inputs.get("audience")
     if audience is not None:
         facts.append(f"age and gender of its audience match the artist's listeners {round(audience * 100)}%")
@@ -52,7 +52,7 @@ def build_prompt(artist: ArtistFacts, picks: list[tuple[Match, FitScore]], brief
         alias = f"S-{index}"
         aliases[alias] = match.candidate.id
         alias_names[alias] = match.candidate.name
-        lines.append(_match_line(alias, match, fit, fit.inputs.get("lift_rank") == 1.0))
+        lines.append(_match_line(alias, match, fit))
     user = (
         f"<artist>\n{{{{A-1}}}} {artist.name}\nprofile_basis: {artist.basis}\nlisteners: {artist.fans}\n</artist>\n"
         f"<brief>\n{brief or '(none)'}\n</brief>\n"
@@ -106,7 +106,7 @@ async def write_pitches(artist: ArtistFacts, picks: list[tuple[Match, FitScore]]
     return WriterOutcome(tuple(kept), tuple(drops + guard_drops))
 
 
-def _artist_line(alias: str, match: Match, fit: FitScore, best: bool) -> str:
+def _artist_line(alias: str, match: Match, fit: FitScore) -> str:
     facts = ["a lesser-known artist"]
     lift = fit.inputs.get("lift")
     if lift is not None and lift > 0:
@@ -125,7 +125,7 @@ def build_brief_prompt(production_id: str, production_name: str, production_type
         alias = f"A-{index}"
         aliases[alias] = match.candidate.id
         alias_names[alias] = match.candidate.name
-        lines.append(_artist_line(alias, match, fit, fit.inputs.get("lift_rank") == 1.0))
+        lines.append(_artist_line(alias, match, fit))
     user = (
         f"<production>\n{{{{P-1}}}} {production_name} ({TYPE_LABELS.get(production_type, 'production')})\n</production>\n"
         f"<brief>\n{brief or '(none)'}\n</brief>\n"
@@ -181,5 +181,6 @@ async def write_brief(
     for item in kept:
         reason, newness = strip_newness_claims(item.reason)
         guard_drops += newness
+        reason = reason or brief_fallback(item.candidate.name, item.fit)
         real.append(replace(item, candidate=replace(item.candidate, id=aliases[item.candidate.id]), reason=reason))
     return BriefOutcome(tuple(real), tuple(drops + guard_drops))

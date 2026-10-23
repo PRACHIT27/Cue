@@ -17,6 +17,24 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.4.6 — 24 Oct 2026 — Vedant
+
+A command-line runner, and steadier writing.
+- **`python -m cue.run artist|supervisor "Name"`** runs either mode end to end, with `--brief`,
+  `--sounds-like` (for an artist Qloo doesn't know), `--type` (supervisor), `--entity-id`,
+  `--emails`, `--trace` (every step and Qloo call) and `--json out.json` (the full result plus
+  events, the shape the website will receive). Each run prints its Claude cost. README Setup
+  updated.
+- **No blank reasons:** if the guards remove a reason line, a sentence built by code from the
+  facts takes its place.
+- **Writer:** the fact lines no longer say a production is "the strongest in its group", and the
+  writer may not rank productions, use "over-index", or state anything about a production's plot,
+  setting or mood. It may only imagine a scene the music could suit. A live run had claimed *Ved*
+  has a "monsoon setting".
+
+Action required:
+- Swara: use `python -m cue.run ... --emails --trace` to check demo picks before the shoot.
+
 ## v1.4.5 — 24 Oct 2026 — Vedant
 
 Closes the gaps listed in v1.4.4.

@@ -36,7 +36,7 @@ def test_prompt_uses_short_aliases_and_data_tags():
     user, aliases, names = build_prompt(ARTIST, [pick("REAL-1"), pick("REAL-2")])
     assert aliases == {"A-1": "A-REAL", "S-1": "REAL-1", "S-2": "REAL-2"}
     assert "{{S-1}} Show REAL-1" in user and user.startswith("<artist>") and "</matches>" in user
-    assert "over-indexes" in user and "(the strongest in its group)" in user
+    assert "more than fans of similar artists do" in user and "strongest in its group" not in user and "over-index" not in user
 
 
 def test_schema_only_allows_given_aliases():
@@ -72,7 +72,8 @@ def test_writer_fills_names_attaches_code_scores_and_guards():
     assert first.fit.value == 0.9
     assert first.email_body == "Hi there, Fake Artist here. My music would suit Show REAL-1. Happy to share two tracks."
     assert first.email_subject == "Music for Show REAL-1"
-    assert out.items[1].reason == "" and out.items[1].candidate.id == "REAL-2"
+    assert out.items[1].reason == "People who watch Show REAL-2 like music like yours more than fans of similar artists do."
+    assert out.items[1].candidate.id == "REAL-2"
     assert sorted({d.guard for d in out.drops}) == ["claim", "grounding", "writer"]
 
 

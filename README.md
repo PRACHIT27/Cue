@@ -69,9 +69,30 @@ of real past placements. Results will be published here before submission.
 
 ## Setup
 
-Coming with the first code. You'll need a Qloo hackathon API key
-([request one here](https://docs.qloo.com/reference/qloo-llm-hackathon-developer-guide)) and an LLM
-API key. Copy `.env.example` to `.env` and fill it in.
+You'll need a Qloo hackathon API key
+([request one here](https://docs.qloo.com/reference/qloo-llm-hackathon-developer-guide)) and an
+Anthropic API key. Copy `.env.example` to `.env`, fill in `QLOO_API_KEY`, `LLM_API_KEY` and
+`LLM_BUDGET_USD` (no paid model call is made without a budget), then:
+
+```bash
+python -m venv .venv
+.venv/Scripts/pip install -r requirements-dev.txt
+.venv/Scripts/python -m pytest tests/ -q
+```
+
+On macOS or Linux, use `.venv/bin/` instead of `.venv/Scripts/`.
+
+### Try it from the command line
+
+```bash
+.venv/Scripts/python -m cue.run artist "Prateek Kuhad" --brief "acoustic songs for a monsoon romance scene" --emails
+.venv/Scripts/python -m cue.run artist "Your Name" --sounds-like "Prateek Kuhad, When Chai Met Toast"
+.venv/Scripts/python -m cue.run supervisor "Bandish Bandits" --type tv_show --trace
+```
+
+Add `--trace` to see every step and Qloo call, and `--json out.json` to save the full result.
+Each run prints what it cost in Claude calls. Cue never sends anything: pitches are drafts the
+artist reviews and sends.
 
 ## Team
 
