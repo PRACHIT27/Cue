@@ -15,6 +15,7 @@ from cue.scoring.fit import score_matches
 from cue.scoring.lift import audience_similarity, lift_scores
 from cue.identity.musicbrainz import LifeSpan, shared_client
 from cue.tools import get_entities, insights
+from cue.tools.names import artist_key
 from cue.tools.records import Demographics, InsightsItem, InsightsRequest, InsightsResult
 
 ARTIST = "urn:entity:artist"
@@ -54,8 +55,30 @@ async def demographics(ids: list[str]) -> InsightsResult:
     return await insights(InsightsRequest("urn:demographics", tuple(ids)))
 
 
-async def life_span(mbid: str | None) -> LifeSpan | None:
-    return await shared_client().life_span(mbid or "")
+async def life_span(mbids: list[str], name: str) -> LifeSpan | None:
+    client = shared_client()
+    ids = [m for m in mbids if m]
+    if not ids:
+        found = await client.find_mbid_by_name(name)
+        ids = [found] if found else []
+    spans = [span for span in [await client.life_span(m) for m in ids] if span is not None]
+    return next((s for s in spans if s.ended), spans[0] if spans else None)
+
+
+def merge_same_artist(items: list[InsightsItem]) -> list[InsightsItem]:
+    by_key: dict[str, InsightsItem] = {}
+    order: list[str] = []
+    for item in items:
+        key = artist_key(item.candidate.name)
+        if key not in by_key:
+            by_key[key] = item
+            order.append(key)
+            continue
+        kept = by_key[key]
+        best, other = (item, kept) if item.affinity > kept.affinity else (kept, item)
+        ids = tuple(dict.fromkeys((*best.duplicate_ids, other.candidate.id, *other.duplicate_ids)))
+        by_key[key] = replace(best, duplicate_ids=ids)
+    return [by_key[k] for k in order]
 
 
 SUPERVISOR_TOOLS = {
@@ -121,6 +144,7 @@ async def run_supervisor(
 
     items: list[InsightsItem] = [i for i in (found.items if found else ()) if i.candidate.popularity <= cap]
     items, drops = remove_explicit(items)
+    items = merge_same_artist(items)
     for drop in drops:
         events.emit("guard_drop", guard=drop.guard, reason=drop.reason, text=drop.text)
 
@@ -129,7 +153,7 @@ async def run_supervisor(
     follow_up = []
     if items:
         follow_up.append(PlannedCall("audiences", "demographics", {"ids": [i.candidate.id for i in items]}))
-        follow_up.append(PlannedCall("profiles", "get_entities", {"ids": [i.candidate.id for i in items]}))
+        follow_up.append(PlannedCall("profiles", "get_entities", {"ids": [x for i in items for x in (i.candidate.id, *i.duplicate_ids)]}))
         if similar_ids:
             follow_up.append(PlannedCall("group", "artists_group", {"group_ids": list(similar_ids), "candidates": candidate_result}))
     audience_calls = await execute(Plan(tuple(follow_up)), tools, events) if follow_up else {}
@@ -150,7 +174,13 @@ async def run_supervisor(
     )[:LIFE_CHECKS]
 
     profiles = {e.ref.id: e for e in (_ok(audience_calls, "profiles") or [])}
-    checks = Plan(tuple(PlannedCall(f"life_{n}", "life_span", {"mbid": getattr(profiles.get(m.candidate.id), "musicbrainz_id", None)}) for n, (m, _) in enumerate(ranked)))
+    duplicates = {i.candidate.id: i.duplicate_ids for i in items}
+
+    def mbids(entity_id: str) -> list[str]:
+        ids = (entity_id, *duplicates.get(entity_id, ()))
+        return [p.musicbrainz_id for p in (profiles.get(i) for i in ids) if p is not None and p.musicbrainz_id]
+
+    checks = Plan(tuple(PlannedCall(f"life_{n}", "life_span", {"mbids": mbids(m.candidate.id), "name": m.candidate.name}) for n, (m, _) in enumerate(ranked)))
     spans = await execute(checks, tools, events) if checks.calls else {}
     shortlisted: list[tuple[Match, FitScore]] = []
     for n, (match, fit) in enumerate(ranked):
@@ -161,8 +191,8 @@ async def run_supervisor(
             drops.append(drop)
             events.emit("guard_drop", guard=drop.guard, reason=drop.reason, text=drop.text)
             continue
-        profile = profiles.get(match.candidate.id)
-        spotify_id = profile.spotify_id if profile else None
+        candidates = [profiles.get(i) for i in (match.candidate.id, *duplicates.get(match.candidate.id, ()))]
+        spotify_id = next((c.spotify_id for c in candidates if c is not None and c.spotify_id), None)
         extra = {
             "life_span": "active" if span is not None else "unverified",
             "spotify_url": f"https://open.spotify.com/artist/{spotify_id}" if spotify_id else None,

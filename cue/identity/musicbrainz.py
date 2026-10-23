@@ -9,6 +9,7 @@ import httpx
 
 from cue.qloo.cache import DAY_S, Cache, InMemoryCache
 from cue.qloo.ratelimit import TokenBucket
+from cue.tools.names import artist_key
 
 BASE_URL = "https://musicbrainz.org/ws/2"
 DEFAULT_USER_AGENT = "Cue/0.1 (Qloo Agentic Hackathon; https://github.com/PRACHIT27/Cue)"
@@ -88,6 +89,23 @@ class MusicBrainzClient:
         span = data.get("life-span") or {}
         return LifeSpan(mbid=mbid, kind=data.get("type"), begin=span.get("begin"), end=span.get("end"), ended=bool(span.get("ended")))
 
+    async def find_mbid_by_name(self, name: str) -> str | None:
+        wanted = compact_key(name)
+        if not wanted:
+            return None
+        for variant in name_variants(name):
+            data = await self._get("/artist", {"query": f'artist:"{variant}"', "limit": "10"})
+            if not data:
+                continue
+            matches = {
+                str(a["id"])
+                for a in data.get("artists") or []
+                if a.get("id") and any(compact_key(n) == wanted for n in [a.get("name") or "", *[x.get("name") or "" for x in a.get("aliases") or []]])
+            }
+            if matches:
+                return matches.pop() if len(matches) == 1 else None
+        return None
+
     async def find_mbid_by_spotify(self, spotify_id: str) -> str | None:
         if not spotify_id:
             return None
@@ -99,6 +117,18 @@ class MusicBrainzClient:
             if artist.get("id"):
                 return str(artist["id"])
         return None
+
+
+def compact_key(name: str) -> str:
+    return artist_key(name).replace(" ", "")
+
+
+def name_variants(name: str) -> list[str]:
+    words = artist_key(name).split()
+    variants = [" ".join(words)] if words else []
+    if len(words) >= 3:
+        variants.append(" ".join([words[0] + words[1], *words[2:]]))
+    return variants
 
 
 _shared: MusicBrainzClient | None = None

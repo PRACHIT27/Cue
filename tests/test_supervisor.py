@@ -14,7 +14,7 @@ def artist(i, pop, name=None):
     return EntityRef(i, name or f"Artist {i}", "urn:entity:artist", pop)
 
 
-def fake_tools(artists, wide=None, ended=(), no_mbid=()):
+def fake_tools(artists, wide=None, ended=(), no_mbid=(), ended_by_name=()):
     calls = []
 
     def result(items):
@@ -39,12 +39,14 @@ def fake_tools(artists, wide=None, ended=(), no_mbid=()):
     async def get_entities(ids):
         return [Entity(EntityRef(i, f"Artist {i}", "urn:entity:artist", 0.5), spotify_id=f"sp{i}", musicbrainz_id=None if i in no_mbid else f"mb{i}") for i in ids]
 
-    async def life_span(mbid):
-        calls.append(("life", mbid))
-        if not mbid:
+    async def life_span(mbids, name):
+        calls.append(("life", tuple(mbids), name))
+        if not mbids:
+            if name in ended_by_name:
+                return LifeSpan("by-name", "Person", "1938", "2022-05-10", True)
             return None
-        artist_id = mbid[2:]
-        return LifeSpan(mbid, "Person", "1922", "2011-01-24" if artist_id in ended else None, artist_id in ended)
+        spans = [LifeSpan(m, "Person", "1922", "2011-01-24" if m[2:] in ended else None, m[2:] in ended) for m in mbids]
+        return next((s for s in spans if s.ended), spans[0])
 
     tools = {"similar_productions": similar_productions, "lesser_known_artists": lesser_known_artists, "artists_group": artists_group, "demographics": demographics, "get_entities": get_entities, "life_span": life_span}
     return tools, calls
@@ -135,3 +137,20 @@ def test_life_span_is_checked_for_at_most_twelve_artists():
     tools, calls = fake_tools(many(30))
     run(tools)
     assert sum(1 for c in calls if isinstance(c, tuple) and c[0] == "life") == 12
+
+
+def test_honorific_duplicates_merge_and_either_entry_ending_drops_the_artist():
+    pool = many(6) + [(artist("dupA", 0.5, "Ustad Fake Khan"), 0.99), (artist("dupB", 0.5, "Fake Khan"), 0.98)]
+    out, _ = run(fake_tools(pool, ended={"dupB"})[0])
+    names = [m.candidate.name for m in out.matches]
+    assert names.count("Ustad Fake Khan") + names.count("Fake Khan") == 1
+    assert all(i.candidate.name not in ("Ustad Fake Khan", "Fake Khan") for i in out.brief.artists)
+    assert any(d.guard == "life_span" and d.text == "Ustad Fake Khan" for d in out.drops)
+
+
+def test_name_search_fallback_catches_an_artist_with_no_mbid():
+    pool = many(10) + [(artist("nomb", 0.5, "Fake Legend"), 0.99)]
+    tools, calls = fake_tools(pool, no_mbid={"nomb"}, ended_by_name={"Fake Legend"})
+    out, _ = run(tools)
+    assert ("life", (), "Fake Legend") in calls
+    assert all(i.candidate.id != "nomb" for i in out.brief.artists)

@@ -17,6 +17,22 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.4.5 — 24 Oct 2026 — Vedant
+
+Closes the gaps listed in v1.4.4.
+- **Honorifics:** `artist_key()` in `cue/tools/names.py` ignores leading titles (Ustad, Pandit,
+  Pt., Shri, Smt., Begum, Dr.…). Supervisor mode merges candidates with the same key, so "Ustad
+  Rashid Khan" and "Rashid Khan" are one artist, and if any of their entries has ended, the artist
+  is dropped. `normalise_name` is unchanged, so onboarding's exact matching still sees honorifics.
+- **No MBID:** `find_mbid_by_name(name)` searches MusicBrainz and accepts a result only when exactly
+  one artist matches with spaces ignored, so "Shiv Kumar Sharma" finds "Shivkumar Sharma". If the
+  exact spelling finds nothing, it tries the first two words joined. Checked live: Shiv Kumar
+  Sharma (died 2022) and Ustad Rashid Khan (died 2024) are now found and dropped.
+- **Writer:** artists are "they/their", never "it", and no gender is guessed. Both writer prompts
+  were bumped.
+
+Action required: none.
+
 ## v1.4.4 — 24 Oct 2026 — Vedant
 
 Supervisor mode drops artists who have died or disbanded (option B), via a MusicBrainz helper.

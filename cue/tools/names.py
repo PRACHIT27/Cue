@@ -18,3 +18,13 @@ def normalise_name(name: str) -> str:
 
 def names_match(a: str, b: str) -> bool:
     return normalise_name(a) == normalise_name(b)
+
+
+HONORIFICS = {"ustad", "ustaad", "pandit", "pt", "shri", "sri", "shrimati", "smt", "begum", "dr", "sir", "maestro", "padma"}
+
+
+def artist_key(name: str) -> str:
+    words = normalise_name(name).split()
+    while len(words) > 1 and words[0] in HONORIFICS:
+        words = words[1:]
+    return " ".join(words)

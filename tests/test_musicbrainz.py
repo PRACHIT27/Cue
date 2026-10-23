@@ -91,3 +91,35 @@ def test_find_mbid_by_spotify():
     assert asyncio.run(client(fake).find_mbid_by_spotify("SP-1")) == "MB-2"
     assert fake.requests[0].url.params["resource"] == "https://open.spotify.com/artist/SP-1"
     assert asyncio.run(client(FakeMB([(404, {})])).find_mbid_by_spotify("SP-9")) is None
+
+
+def search(*artists):
+    return {"artists": [{"id": i, "name": n, "aliases": [{"name": a} for a in aliases]} for i, n, aliases in artists]}
+
+
+def test_name_search_accepts_one_strict_match_ignoring_honorifics():
+    fake = FakeMB([(200, search(("MB-7", "Shivkumar Sharma", ["Pt. Shiv Kumar Sharma"]), ("MB-8", "Shiv Kumar Sharma Band", [])))])
+    assert asyncio.run(client(fake).find_mbid_by_name("Shiv Kumar Sharma")) == "MB-7"
+    assert fake.requests[0].url.params["query"] == 'artist:"shiv kumar sharma"'
+
+
+def test_name_search_refuses_ambiguous_or_fuzzy_matches():
+    twins = FakeMB([(200, search(("MB-1", "Rashid Khan", []), ("MB-2", "Ustad Rashid Khan", [])))])
+    assert asyncio.run(client(twins).find_mbid_by_name("Rashid Khan")) is None
+    near = FakeMB([(200, search(("MB-3", "Rashid Ali", []),))])
+    assert asyncio.run(client(near).find_mbid_by_name("Rashid Khan")) is None
+    assert asyncio.run(client(FakeMB([])).find_mbid_by_name("")) is None
+
+
+def test_spacing_variants_match_and_a_second_spelling_is_tried():
+    fake = FakeMB([(200, {"artists": []}), (200, search(("MB-7", "Shivkumar Sharma", []),))])
+    assert asyncio.run(client(fake).find_mbid_by_name("Pt. Shiv Kumar Sharma")) == "MB-7"
+    assert [r.url.params["query"] for r in fake.requests] == ['artist:"shiv kumar sharma"', 'artist:"shivkumar sharma"']
+
+
+def test_name_variants():
+    from cue.identity.musicbrainz import name_variants
+
+    assert name_variants("Shiv Kumar Sharma") == ["shiv kumar sharma", "shivkumar sharma"]
+    assert name_variants("Rashid Khan") == ["rashid khan"]
+    assert name_variants("") == []
