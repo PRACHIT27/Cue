@@ -26,3 +26,20 @@ def strip_placement_claims(text: str) -> tuple[str, list[Drop]]:
             continue
         kept.append(sentence)
     return join_sentences(kept), drops
+
+
+NEWNESS = re.compile(
+    r"\b(new|newer|emerging|up[- ]and[- ]coming|rising|breakout|budding|fresh|young)\s+(artist|artists|talent|voice|voices|star|stars|singer|singers|act|acts|musician|musicians|name|names)\b",
+    re.IGNORECASE,
+)
+
+
+def strip_newness_claims(text: str) -> tuple[str, list[Drop]]:
+    drops: list[Drop] = []
+    kept: list[str] = []
+    for sentence in sentences(text):
+        if sentence != "\n" and NEWNESS.search(sentence):
+            drops.append(Drop("claim", "calls an under-the-radar artist new; Cue has no debut dates", sentence))
+            continue
+        kept.append(sentence)
+    return join_sentences(kept), drops

@@ -19,8 +19,8 @@ Sync marketplaces let you search by genre and mood. None of them answer the ques
 
 - **Artists:** enter your name, get a ranked list of productions to pitch, with a reason for each
   and a pitch email you can edit and send yourself.
-- **Music supervisors:** enter your show, film, game or brand, get a shortlist of emerging artists
-  whose fans match your audience.
+- **Music supervisors:** enter your show, film, game or brand, get a shortlist of under-the-radar
+  artists whose fans match your audience.
 
 ## How it works
 

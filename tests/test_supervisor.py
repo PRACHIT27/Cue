@@ -1,6 +1,6 @@
 import asyncio
 
-from cue.agents.supervisor_run import EMERGING_CAP, WIDENED_CAP, run_supervisor
+from cue.agents.supervisor_run import SHORTLIST_LABEL, UNDER_RADAR_CAP, WIDENED_CAP, run_supervisor
 from cue.agents.writer import build_brief_prompt
 from cue.harness.events import RunEvents
 from cue.records import FitScore, Match
@@ -23,9 +23,9 @@ def fake_tools(artists, wide=None):
         calls.append("similar")
         return ["SHOW-2", "SHOW-3"]
 
-    async def emerging_artists(signal_ids, cap):
+    async def lesser_known_artists(signal_ids, cap):
         calls.append(("artists", cap))
-        pool = artists if cap == EMERGING_CAP else (wide or artists)
+        pool = artists if cap == UNDER_RADAR_CAP else (wide or artists)
         return result([InsightsItem(a, aff, n, {}) for n, (a, aff) in enumerate(pool, 1) if a.popularity <= cap + 0.5])
 
     async def artists_group(group_ids, candidates):
@@ -38,7 +38,7 @@ def fake_tools(artists, wide=None):
     async def get_entities(ids):
         return [Entity(EntityRef(i, f"Artist {i}", "urn:entity:artist", 0.5), spotify_id=f"sp{i}") for i in ids]
 
-    tools = {"similar_productions": similar_productions, "emerging_artists": emerging_artists, "artists_group": artists_group, "demographics": demographics, "get_entities": get_entities}
+    tools = {"similar_productions": similar_productions, "lesser_known_artists": lesser_known_artists, "artists_group": artists_group, "demographics": demographics, "get_entities": get_entities}
     return tools, calls
 
 
@@ -63,9 +63,9 @@ def many(n, start_pop=0.4):
 def test_no_artist_above_the_cap_ever_appears():
     pool = many(10) + [(artist("famous", 0.97), 0.99)]
     out, _ = run(fake_tools(pool)[0])
-    assert out.cap == EMERGING_CAP
-    assert all(m.candidate.popularity <= EMERGING_CAP for m in out.matches)
-    assert all(i.candidate.popularity <= EMERGING_CAP for i in out.brief.artists)
+    assert out.cap == UNDER_RADAR_CAP
+    assert all(m.candidate.popularity <= UNDER_RADAR_CAP for m in out.matches)
+    assert all(i.candidate.popularity <= UNDER_RADAR_CAP for i in out.brief.artists)
 
 
 def test_thin_results_widen_the_cap_and_say_so():
@@ -84,7 +84,7 @@ def test_brief_has_real_names_spotify_links_and_code_scores():
     assert first.fit.inputs["spotify_url"] == f"https://open.spotify.com/artist/sp{first.candidate.id}"
     assert first.fit.value is not None
     assert len(out.brief.artists) == 8
-    assert events[-1]["kind"] == "result"
+    assert events[-1]["kind"] == "result" and events[-1]["label"] == SHORTLIST_LABEL
 
 
 def test_explicit_artist_names_are_dropped():

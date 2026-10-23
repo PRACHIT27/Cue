@@ -7,6 +7,7 @@ from cue.agents.common.llm import LLMError, _env, structured
 from cue.agents.writer import instructions
 from cue.agents.writer.guardrail import check_pitches
 from cue.guards import Drop, Known, guard_brief_items
+from cue.guards.claims import strip_newness_claims
 from cue.records import BriefItem, FitScore, Match, PitchItem
 
 TYPE_LABELS = {
@@ -106,7 +107,7 @@ async def write_pitches(artist: ArtistFacts, picks: list[tuple[Match, FitScore]]
 
 
 def _artist_line(alias: str, match: Match, fit: FitScore, best: bool) -> str:
-    facts = ["an emerging artist, still building an audience"]
+    facts = ["a lesser-known artist"]
     lift = fit.inputs.get("lift")
     if lift is not None and lift > 0:
         facts.append("this production's audience likes this artist more than audiences of similar productions do")
@@ -176,5 +177,9 @@ async def write_brief(
         match, fit = by_alias[alias]
         drafts.append(BriefItem(candidate=replace(match.candidate, id=alias), fit=fit, reason=str(entry.get("reason") or "")))
     kept, guard_drops = guard_brief_items(drafts, Known(dict(alias_names)))
-    real = [replace(item, candidate=replace(item.candidate, id=aliases[item.candidate.id])) for item in kept]
+    real: list[BriefItem] = []
+    for item in kept:
+        reason, newness = strip_newness_claims(item.reason)
+        guard_drops += newness
+        real.append(replace(item, candidate=replace(item.candidate, id=aliases[item.candidate.id]), reason=reason))
     return BriefOutcome(tuple(real), tuple(drops + guard_drops))

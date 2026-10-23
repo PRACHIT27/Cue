@@ -17,6 +17,23 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.4.3 — 24 Oct 2026 — Vedant
+
+Supervisor mode says **under-the-radar**, not emerging (option A from v1.4.2's known problem).
+- Qloo carries no birth, death or debut dates for artists, so a popularity cap can't tell a
+  newcomer from a veteran: *Bandish Bandits* returned Bhimsen Joshi and Mehdi Hassan. The shortlist
+  is now labelled "Under-the-radar artists" (`SHORTLIST_LABEL`, also on the `result` event), the
+  writer calls them lesser-known and is told never to say new, emerging, up-and-coming or rising.
+- PRD FR-8, US-4 and §13, README, CLAUDE.md and DESIGN §5 and §8 updated. Artist mode's "emerging
+  musicians" is unchanged: it describes who uses Cue, which is accurate.
+- Next, option B: check each shortlisted artist's MusicBrainz life-span and drop artists who have
+  died or disbanded, reusing Prachit's `cue/identity/musicbrainz.py`.
+
+Action required:
+- Prachit: show `SHORTLIST_LABEL` as the supervisor results heading.
+- Swara: in BUILD_PROMPTS WU-12, the eval metric "emerging share" is now "under-the-radar share".
+  Demo script and write-up: say "under-the-radar", never "emerging", for supervisor results.
+
 ## v1.4.2 — 24 Oct 2026 — Vedant
 
 WU-08 supervisor mode (`cue/agents/supervisor_run.py`) and a sturdier writer.

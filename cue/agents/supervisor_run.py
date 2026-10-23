@@ -17,7 +17,8 @@ from cue.tools import get_entities, insights
 from cue.tools.records import Demographics, InsightsItem, InsightsRequest, InsightsResult
 
 ARTIST = "urn:entity:artist"
-EMERGING_CAP = 0.80
+UNDER_RADAR_CAP = 0.80
+SHORTLIST_LABEL = "Under-the-radar artists"
 WIDENED_CAP = 0.85
 MIN_ARTISTS = 8
 ARTIST_TAKE = 30
@@ -32,7 +33,7 @@ async def similar_productions(production_type: str, production_id: str) -> list[
     return [i.candidate.id for i in result.items if i.candidate.id != production_id][:GROUP_SIZE]
 
 
-async def emerging_artists(signal_ids: list[str], cap: float) -> InsightsResult:
+async def lesser_known_artists(signal_ids: list[str], cap: float) -> InsightsResult:
     return await insights(InsightsRequest(ARTIST, tuple(signal_ids), popularity_max=cap, take=ARTIST_TAKE))
 
 
@@ -53,7 +54,7 @@ async def demographics(ids: list[str]) -> InsightsResult:
 
 SUPERVISOR_TOOLS = {
     "similar_productions": similar_productions,
-    "emerging_artists": emerging_artists,
+    "lesser_known_artists": lesser_known_artists,
     "artists_group": artists_group,
     "demographics": demographics,
     "get_entities": get_entities,
@@ -93,11 +94,11 @@ async def run_supervisor(
         (
             PlannedCall("profile", "demographics", {"ids": [production_id]}),
             PlannedCall("similar", "similar_productions", {"production_type": production_type, "production_id": production_id}),
-            PlannedCall("artists", "emerging_artists", {"signal_ids": [production_id], "cap": EMERGING_CAP}),
+            PlannedCall("artists", "lesser_known_artists", {"signal_ids": [production_id], "cap": UNDER_RADAR_CAP}),
         )
     )
     results = await execute(plan, tools, events)
-    cap = EMERGING_CAP
+    cap = UNDER_RADAR_CAP
     found = _ok(results, "artists")
     if found is None or len(found.items) < MIN_ARTISTS:
         cap = WIDENED_CAP
@@ -106,9 +107,9 @@ async def run_supervisor(
             step="widen",
             tool="supervisor",
             status="ok",
-            note=f"Only {len(found.items) if found else 0} emerging artists under {EMERGING_CAP:.2f}; widened the cap to {WIDENED_CAP:.2f}.",
+            note=f"Only {len(found.items) if found else 0} under-the-radar artists below popularity {UNDER_RADAR_CAP:.2f}; widened the cap to {WIDENED_CAP:.2f}.",
         )
-        widened = await execute(Plan((PlannedCall("artists_wide", "emerging_artists", {"signal_ids": [production_id], "cap": WIDENED_CAP}),)), tools, events)
+        widened = await execute(Plan((PlannedCall("artists_wide", "lesser_known_artists", {"signal_ids": [production_id], "cap": WIDENED_CAP}),)), tools, events)
         found = _ok(widened, "artists_wide") or found
 
     items: list[InsightsItem] = [i for i in (found.items if found else ()) if i.candidate.popularity <= cap]
@@ -155,5 +156,5 @@ async def run_supervisor(
         events.emit("guard_drop", guard=drop.guard, reason=drop.reason, text=drop.text)
 
     result = Brief(run_id=events.run_id, production_id=production_id, artists=written.items)
-    events.emit("result", artists=len(result.artists), matches=len(matches), cap=cap)
+    events.emit("result", artists=len(result.artists), matches=len(matches), cap=cap, label=SHORTLIST_LABEL)
     return SupervisorRun(result, tuple(scores), tuple(matches), tuple(drops) + written.drops, cap)

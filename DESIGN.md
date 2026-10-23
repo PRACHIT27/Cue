@@ -275,7 +275,7 @@ Checked on 21 Oct 2026 with real calls. Build WU-01 against these, not against t
 | Pitch-claim guard | After the writer | "Your song was featured in…" without data showing it |
 | Score lock | Writer output schema | The model can't output a score; scores are joined in by code |
 | Input handling | Planner and writer | Artist names and briefs are data in a delimited field, never instructions |
-| Popularity cap | Supervisor mode | Famous artists labelled as emerging |
+| Popularity cap | Supervisor mode | Famous artists on an under-the-radar shortlist |
 
 **Caching** (private, server-side only; Qloo allows this with no time limit)
 
@@ -410,7 +410,7 @@ Curated by hand or from sources whose terms allow it (PRD Q-4).
 |---|---|
 | Hit rate in top 10 | Is the known answer in the system's top 10? Both directions |
 | Made-up names | Share of suggested names that don't resolve via Qloo Search |
-| Emerging share | Share of suggested artists under the popularity cap |
+| Under-the-radar share | Share of suggested artists under the popularity cap |
 | Consistency | Overlap of top 10 across three runs of the same input |
 | Time and cost | Per run, median and slowest |
 

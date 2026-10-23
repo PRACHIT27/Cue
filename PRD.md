@@ -12,7 +12,7 @@
 Cue is an agent that matches emerging musicians with the TV shows, films, video games, podcasts and
 ads whose audiences already love their sound. It works in two directions. An artist gets a ranked
 list of productions to pitch and a ready-to-send pitch kit. A music supervisor gets a ranked
-shortlist of emerging artists who fit their show. Qloo's taste data drives every match; plain code
+shortlist of under-the-radar artists who fit their show. Qloo's taste data drives every match; plain code
 scores them; an LLM plans the work and writes the output.
 
 ## 2. Problem statement
@@ -72,7 +72,7 @@ story.
 | US-1 | As an artist, I paste my Spotify link or type my name (or, if Qloo doesn't know me yet, describe my music) and see who my fans are |
 | US-2 | As an artist, I see a ranked list of shows, films, games, podcasts and brands that fit my fans, each with a reason |
 | US-3 | As an artist, I get a pitch email per production that I can edit and send myself |
-| US-4 | As a supervisor, I enter a show, film, game or brand and get a ranked shortlist of emerging artists |
+| US-4 | As a supervisor, I enter a show, film, game or brand and get a ranked shortlist of under-the-radar artists |
 | US-5 | As anyone, I watch the agent work step by step and see every Qloo call it made |
 | US-6 | As a judge, I see an eval page comparing Cue with an LLM alone and an LLM with web search |
 
@@ -190,9 +190,13 @@ a send action.
 ### FR-8 Supervisor mode (US-4)
 
 Same pipeline, reversed: resolve the production, profile its audience, run Insights for artists
-with a popularity cap so results are emerging artists.
+with a popularity cap (0.80, widened to 0.85 when fewer than 8 come back) so results are
+**under-the-radar** artists: lesser-known, not necessarily new. Qloo has no birth, death or debut
+dates for artists, so the cap alone also returns veterans and late artists; Cue never calls the
+shortlist "emerging" or "new".
 
-*Acceptance:* no artist above the popularity cap appears; results reuse the same scorer and guard.
+*Acceptance:* no artist above the popularity cap appears; results reuse the same scorer and guard;
+no shortlist text calls an artist new, emerging, up-and-coming or rising.
 
 ### FR-9 Trace and eval (US-5, US-6)
 
@@ -231,7 +235,8 @@ limiter and retries.
 - No automatic sending (FR-7)
 - Inputs are data, never instructions; prompt injection in an artist name or brief can't change the
   agent's tools or rules
-- Popularity cap in supervisor mode keeps the product honest about "emerging"
+- Popularity cap in supervisor mode keeps famous artists out; the "under-the-radar" label keeps the
+  product honest that lesser-known isn't the same as new
 
 ## 12. Legal and data constraints
 
@@ -245,7 +250,7 @@ limiter and retries.
 |---|---|
 | Hit rate in top 10, Cue vs LLM alone | Cue clearly higher |
 | Made-up names in Cue output | 0% |
-| Share of emerging artists in supervisor mode | 100% under the popularity cap |
+| Share of under-the-radar artists in supervisor mode | 100% under the popularity cap |
 | Full run time | Under 60 s, cached under 5 s |
 | Live demo uptime through judging | No outages |
 

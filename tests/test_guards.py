@@ -103,3 +103,22 @@ def test_brief_items_are_grounded():
     items = [BriefItem(ref("S-2"), fit("S-2"), "Viewers of {{S-2}} love this sound."), BriefItem(ref("S-7"), fit("S-7"), "x")]
     kept, drops = guard_brief_items(items, KNOWN)
     assert [i.reason for i in kept] == ["Viewers of Other Fake Show love this sound."] and len(drops) == 1
+
+
+@pytest.mark.parametrize(
+    "line, dropped",
+    [
+        ("A rising star for your soundtrack.", True),
+        ("This emerging artist could suit the finale.", True),
+        ("An up-and-coming voice for a quiet scene.", True),
+        ("A new talent worth a listen.", True),
+        ("A lesser-known artist whose fans love your show.", False),
+        ("The new season's mood suits this voice.", False),
+        ("Her rising melody could suit the finale.", False),
+    ],
+)
+def test_newness_claims(line, dropped):
+    from cue.guards.claims import strip_newness_claims
+
+    text, drops = strip_newness_claims(line)
+    assert (text == "") == dropped and bool(drops) == dropped
