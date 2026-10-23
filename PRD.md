@@ -149,18 +149,20 @@ each traced to a Qloo call.
 ### FR-3 Production matching (US-2)
 
 Run Insights for TV shows, movies, video games, podcasts and brands **in parallel**, with
-`feature.explainability=true`.
+`feature.explainability=true`, once per popularity section (big screen, prime time, indie gems;
+[DESIGN.md](DESIGN.md) §6).
 
-*Acceptance:* the five calls start together, not one after another (visible in the trace); each
-result carries Qloo's explanation.
+*Acceptance:* the calls start together, not one after another (visible in the trace); each result
+carries Qloo's explanation; every section that Qloo has data for shows its own matches.
 
 ### FR-4 Fit check (US-2)
 
-For the top candidates, run Compare (artist vs production) and Trending (is the production rising).
+For each production type, run the same Insights call for a comparison group of similar artists,
+and score every production by **lift**: how much more this artist's fans like it than the group's
+fans do ([DESIGN.md](DESIGN.md) §6). Add the demographic match between fans and viewers.
 
-*Acceptance:* every ranked production has a compare result and a trend value with its as-of date,
-or is marked `insufficient_data`. Wherever trend is shown, it is labelled "as of July 2026" (the
-latest week in Qloo's hackathon data), never as current.
+*Acceptance:* every ranked production has a lift value, or is marked `insufficient_data`. Trend is
+not shown: Qloo's hackathon trending data stopped changing around Dec 2025 (Q-9).
 
 ### FR-5 Fit score (US-2, US-4)
 
@@ -257,9 +259,25 @@ mode end to end by 25 Oct, supervisor mode and eval by 28 Oct, submitted by 30 O
 | # | Question | Owner | Blocks |
 |---|---|---|---|
 | Q-4 | Where do we get ~300 known placements, and are we allowed to use that source? | Swara | WU-11 |
-| Q-7 | The fit formula's two biggest inputs are weak: Insights affinity barely varies (top TV results all 0.945–0.956), Compare finds no shared tags between an artist and a show, and the same popular shows (*Aarya*, *Criminal Justice*) top every Indian artist's list. Lift over a comparison group of similar artists is the leading option. See [DESIGN.md](DESIGN.md) §6 | Vedant | WU-04 |
 | Q-8 | Onboarding needs lookups by external ID. Add `find_by_spotify(spotify_id)` and `find_by_musicbrainz(mbid)`, both `-> list[EntityRef]`, to the contract (§7.1)? | all three | WU-01, FR-1 |
-| Q-9 | Is there trending data for artists at all? Prateek Kuhad's came back empty while a TV show's didn't | Vedant | WU-04 |
+
+### Answered — 24 Oct 2026, from live API calls
+
+**Q-7 — the fit score: lift inside three popularity sections.** Productions are split by their own
+popularity into big screen (≥ 0.90), prime time (0.70–0.90) and indie gems (< 0.70), each its own
+Insights call. Inside a section they rank by `0.70 × lift_rank + 0.30 × audience`, where lift is
+how much more this artist's fans like the production than fans of four similar artists do. For
+Prateek Kuhad this drops *Panchayat* and *Kota Factory* (everyone's shows) and lifts
+*Masaba Masaba*, *Decoupled* and *Ray*. One combined call for the comparison group gives nearly the
+same order as four separate calls. Compare overlap and reverse affinity are dropped: the first is
+empty between an artist and a show, the second barely varies. Full rule in
+[DESIGN.md](DESIGN.md) §6.
+
+**Q-9 — artist trending: it exists, but it is frozen.** Artist series come back only when the window
+is longer than about 13 weeks, which is why it looked empty. But for every entity checked, the
+weekly rank and percentile have not changed since about Dec 2025 (*Panchayat* last moved on
+19 Dec 2025; Prateek Kuhad never moved). So trend can't say what is rising, and Cue doesn't use or
+show it. The `trending` tool still works if Qloo's data starts moving.
 
 ### Answered — 22 Oct 2026, agreed by the team
 

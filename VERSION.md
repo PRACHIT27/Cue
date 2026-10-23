@@ -17,6 +17,26 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.3.0 — 24 Oct 2026 — Vedant
+
+MINOR: PRD Q-7 and Q-9 settled from live calls; the fit score is redefined.
+- **DESIGN.md §6:** productions split into three popularity sections (big screen ≥ 0.90, prime
+  time 0.70–0.90, indie gems < 0.70), each its own Insights call. Inside a section they rank by
+  `match = 0.70 × lift_rank + 0.30 × audience`. **Lift** = how much more this artist's fans like a
+  production than a comparison group of 4 similar artists' fans do, from one extra Insights call
+  per production type. Compare overlap, reverse affinity and trend are dropped from the score.
+- **No contract change:** `lift`, `lift_rank`, `audience` and `section` go in `FitScore.inputs`;
+  `Match.overlap` and `Match.trend` stay `None`.
+- **PRD Q-9:** artist trending needs a window longer than about 13 weeks (the tool now fetches 16),
+  but Qloo's trending data stopped changing around Dec 2025 for every entity checked. Cue doesn't
+  use or show trend. PRD FR-3 and FR-4 updated to match.
+
+Action required:
+- Prachit: group result cards by `FitScore.inputs["section"]`, and drop the "as of July 2026" trend
+  label from `web/`, since no trend is shown.
+- Swara: the demo script and write-up should explain lift ("your fans over-index on X compared with
+  fans of similar artists") and say plainly that trend isn't shown because Qloo's data is static.
+
 ## v1.2.2 — 23 Oct 2026 — Vedant
 
 WU-01: the nine Qloo tools in `cue/tools/`, with the §7.1 signatures, all through the WU-00 client.
