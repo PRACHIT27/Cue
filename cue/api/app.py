@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, model_validator
 
+from cue.agents.planner.agent import similar_artists
 from cue.api import onboarding
 from cue.api.runs import RunManager
 from cue.api.serialize import jsonable
@@ -129,6 +130,19 @@ def create_app(manager: RunManager | None = None, musicbrainz: Any = None) -> Fa
             if tag.name not in tags.setdefault(group, []):
                 tags[group].append(tag.name)
         return {"entity": jsonable(record), "tags": tags, "demographics": jsonable(demographics)}
+
+    @app.get("/artists/{entity_id}/similar")
+    async def artist_similar(entity_id: str) -> dict[str, Any]:
+        """The artists an artist run compares against: the same similar_artists call the planner makes."""
+
+        async def work():
+            ids = await similar_artists([entity_id])
+            return ids, (await get_entities(ids) if ids else [])
+
+        ids, records = await with_qloo(work)
+        by_id = {r.ref.id: r for r in records}
+        found = [by_id[i] for i in ids if i in by_id]
+        return {"artists": [{"id": r.ref.id, "name": r.ref.name, "image_url": r.image_url, "popularity": r.ref.popularity} for r in found]}
 
     @app.post("/productions/search")
     async def production_search(body: ProductionLookup) -> dict[str, Any]:

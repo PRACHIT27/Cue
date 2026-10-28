@@ -225,8 +225,34 @@ function Confirm({ found, onConfirm, onBack }) {
   );
 }
 
+const LEVELS = [
+  [0.25, "Far more than average"],
+  [0.05, "More than average"],
+  [-0.05, "About average"],
+  [-0.25, "Fewer than average"],
+  [-Infinity, "Far fewer than average"],
+];
+
+function level(value) {
+  return LEVELS.find(([floor]) => value >= floor)[1];
+}
+
+function compact(n) {
+  if (n == null) return "—";
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)}K`;
+  return String(n);
+}
+
+function distinct(list) {
+  const key = (t) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return list.filter((t, i, all) => all.findIndex((x) => key(x) === key(t)) === i);
+}
+
 function Fans({ artist, onStart }) {
   const [profile, setProfile] = useState(null);
+  const [similar, setSimilar] = useState(null);
   const [error, setError] = useState("");
   const [brief, setBrief] = useState("");
 
@@ -235,68 +261,138 @@ function Fans({ artist, onStart }) {
     get(`/artists/${artist.profile_id}/profile`)
       .then((p) => live && setProfile(p))
       .catch((failure) => live && setError(failure.message));
+    get(`/artists/${artist.profile_id}/similar`)
+      .then((s) => live && setSimilar(s.artists || []))
+      .catch(() => live && setSimilar([]));
     return () => {
       live = false;
     };
   }, [artist.profile_id]);
 
-  const age = profile?.demographics?.age || {};
-  const peak = peakAge(age);
+  const entity = profile?.entity || {};
   const tags = profile?.tags || {};
-  const interests = [...(tags.genre || []), ...(tags.style || []), ...(tags.subgenre || [])].filter((t, i, all) => all.indexOf(t) === i).slice(0, 8);
-  const moods = [...(tags.music || []), ...(tags.characteristic || [])].filter((t, i, all) => all.indexOf(t) === i).slice(0, 6);
+  const genres = distinct([...(tags.genre || []), ...(tags.subgenre || [])]).slice(0, 6);
+  const sound = distinct([...(tags.music || []), ...(tags.characteristic || []), ...(tags.style || []).filter((s) => !s.includes(" "))]).slice(0, 8);
+  const themes = (tags.theme || []).slice(0, 6);
   const audience = tags.audience || [];
-  const ageValues = Object.values(age);
-  const maxAge = Math.max(0.0001, ...ageValues.map((v) => v + 1));
+  const instruments = tags.instrument || [];
+  const influences = tags.influenced_by || [];
+  const age = profile?.demographics?.age || {};
+  const female = profile?.demographics?.gender?.female;
+  const peak = peakAge(age);
+  const listeners = entity.lastfm_listeners;
+  const plays = entity.lastfm_scrobbles;
+  const popularity = entity.ref?.popularity;
+  const backdrop = entity.image_url || artist.image;
 
   return (
     <>
-      <div className="between">
-        <div className="stack" style={{ gap: 4 }}>
-          <span className="muted">Hi {artist.name}</span>
-          <h2>Here's who loves your music</h2>
-          {artist.basis === "projected" && <p className="muted small">Based on fans of {artist.resemble?.join(", ")}, the artists you resemble.</p>}
-        </div>
-      </div>
       {error && <p className="error">Couldn't load your fan profile: {error}</p>}
       {!profile && !error && (
         <div className="loading"><span className="spinner" /><span className="muted">Reading your fans from Qloo…</span></div>
       )}
       {profile && (
         <>
-          <div className="grid-3">
-            <div className="card stat dark"><span>Fans' top taste</span><strong>{interests[0] || "—"}</strong></div>
-            <div className="card stat"><span className="muted">Mostly aged</span><strong>{peak ? AGE_LABELS[peak] : "—"}</strong></div>
-            <div className="card stat"><span className="muted">Last.fm listeners</span><strong>{profile.entity.lastfm_listeners ? profile.entity.lastfm_listeners.toLocaleString() : "—"}</strong></div>
-          </div>
-          <div className="grid-3">
+          <section className="card fan-hero" style={backdrop ? { "--poster": `url("${encodeURI(backdrop)}")` } : undefined}>
+            <Poster src={backdrop} name={artist.name} type="urn:entity:artist" size="xl" />
+            <div className="stack" style={{ gap: 8 }}>
+              <span className="fan-hi">Hi {artist.name}</span>
+              <h2>Here's who loves your music</h2>
+              {entity.description && <p className="fan-desc">{entity.description}</p>}
+              {artist.basis === "projected" && <p className="fan-desc">Based on fans of {artist.resemble?.join(", ")}, the artists you sound like.</p>}
+              {genres.length > 0 && <div className="chips">{genres.map((t) => <span className="chip" key={t}>{t}</span>)}</div>}
+            </div>
+            <div className="hero-stats">
+              <div className="hero-stat"><strong>{compact(listeners)}</strong><span>Last.fm listeners</span></div>
+              <div className="hero-stat"><strong>{compact(plays)}</strong><span>Total plays</span></div>
+              <div className="hero-stat"><strong>{listeners && plays ? Math.round(plays / listeners) : "—"}</strong><span>Plays per listener</span></div>
+              <div className="hero-stat"><strong>{popularity == null ? "—" : Math.round(popularity * 100)}<small>/100</small></strong><span>Popularity on Qloo</span></div>
+            </div>
+          </section>
+
+          <div className="grid-2 fan-grid">
             <div className="card stack">
-              <h3>What your fans are into</h3>
-              <p className="muted small">Genres and styles Qloo links to your music.</p>
-              <div className="chips">{interests.map((t) => <span className="chip" key={t}>{t}</span>)}</div>
-              {moods.length > 0 && <><p className="muted small">The sound</p><div className="chips">{moods.map((t) => <span className="chip" key={t}>{t}</span>)}</div></>}
+              <div className="between"><h3>How old your fans are</h3>{peak && <span className="pill">Biggest group: {AGE_LABELS[peak]}</span>}</div>
+              <p className="muted small">Compared with the average Qloo user. Bars to the right mean more of your fans are that age.</p>
+              <div className="diverge" role="list">
+                {Object.entries(AGE_LABELS).map(([key, labelText]) => {
+                  const value = age[key];
+                  if (value == null) return null;
+                  const width = `${Math.min(50, Math.abs(value) * 50)}%`;
+                  return (
+                    <div key={key} role="listitem" className={`diverge-row ${key === peak ? "peak" : ""}`}>
+                      <span className="diverge-label">{labelText}</span>
+                      <span className="diverge-track"><span className={`diverge-bar ${value >= 0 ? "up" : "down"}`} style={{ width }} /></span>
+                      <span className="level">{level(value)}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             <div className="card stack">
-              <h3>Age of your fans</h3>
-              <p className="muted small">Taller means more of your fans than average are this age.</p>
-              <div className="age-chart" role="img" aria-label={`Fans peak at ${peak ? AGE_LABELS[peak] : "unknown"}`}>
-                {Object.entries(AGE_LABELS).map(([key, labelText]) => (
-                  <div key={key} className={`age-col ${key === peak ? "peak" : ""}`}>
-                    <span className="col" style={{ height: `${Math.max(6, (((age[key] ?? -1) + 1) / maxAge) * 110)}px` }} />
-                    <span>{labelText}</span>
+              <h3>Women and men</h3>
+              <p className="muted small">Which way your fans lean, compared with the average Qloo user.</p>
+              {female == null ? (
+                <p className="muted">No gender data from Qloo.</p>
+              ) : (
+                <>
+                  <div className="meter" aria-label={genderLean(profile.demographics.gender)}>
+                    <span style={{ left: `${50 - Math.max(-1, Math.min(1, female)) * 45}%` }} />
+                  </div>
+                  <div className="meter-labels"><span>More women</span><span>Even</span><span>More men</span></div>
+                  <strong style={{ color: "var(--ink)" }}>{genderLean(profile.demographics.gender)}</strong>
+                </>
+              )}
+              {audience.length > 0 && (
+                <>
+                  <p className="muted small" style={{ marginTop: 8 }}>Qloo describes your fans as</p>
+                  <div className="chips">{audience.map((t) => <span className="chip gold" key={t}>{t}</span>)}</div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {(sound.length > 0 || themes.length > 0 || influences.length > 0) && (
+            <div className="grid-3">
+              {sound.length > 0 && (
+                <div className="card stack">
+                  <h3>Your sound, in Qloo's words</h3>
+                  <div className="chips">{sound.map((t) => <span className="chip gold" key={t}>{t}</span>)}</div>
+                  {instruments.length > 0 && <p className="muted small">Played on {instruments.join(" · ")}</p>}
+                </div>
+              )}
+              {themes.length > 0 && (
+                <div className="card stack">
+                  <h3>What your songs are about</h3>
+                  <div className="chips">{themes.map((t) => <span className="chip" key={t}>{t}</span>)}</div>
+                </div>
+              )}
+              {influences.length > 0 && (
+                <div className="card stack">
+                  <h3>Influenced by</h3>
+                  <ul className="plain-list">{influences.map((t) => <li key={t}>{t}</li>)}</ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {similar && similar.length > 0 && (
+            <div className="card stack">
+              <h3>Cue compares you with fans of</h3>
+              <p className="muted small">A match counts when your fans like a show, film, game, podcast or brand more than these artists' fans do. That's what keeps the list from being just "whatever is popular".</p>
+              <div className="similar-row">
+                {similar.map((s) => (
+                  <div className="similar" key={s.id}>
+                    <Poster src={s.image_url} name={s.name} type="urn:entity:artist" />
+                    <span>{s.name}</span>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="card stack">
-              <h3>Who they are</h3>
-              <p>{genderLean(profile.demographics?.gender) || "No gender data"}</p>
-              {audience.length > 0 && <><p className="muted small">Qloo describes your audience as</p><div className="chips">{audience.map((t) => <span className="chip" key={t}>{t}</span>)}</div></>}
-              {(tags.influenced_by || []).length > 0 && <p className="muted small">Influences: {tags.influenced_by.join(", ")}</p>}
-            </div>
-          </div>
+          )}
+
           <form
-            className="card stack"
+            className="card stack brief-card"
             onSubmit={(event) => {
               event.preventDefault();
               onStart(brief.trim());
