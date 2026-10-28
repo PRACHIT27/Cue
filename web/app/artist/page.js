@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import FitRing from "../../components/FitRing";
+import Poster from "../../components/Poster";
+import RunProgress, { ARTIST_STAGES } from "../../components/RunProgress";
 import Shell, { Steps } from "../../components/Shell";
 import Trace from "../../components/Trace";
 import { get, post, useRun } from "../../lib/api";
@@ -320,9 +322,7 @@ function Matches({ run, onPitch, onRetry }) {
           <h2>Your best places to pitch</h2>
           <p className="muted">Ranked by how much more your fans like each one than fans of similar artists do.</p>
         </div>
-        {run.status === "running" && (
-          <div className="card loading"><span className="spinner" /><strong>Asking Qloo about your fans…</strong><span className="muted small">This takes about 30 seconds. Watch every call in the trace.</span></div>
-        )}
+        {run.status === "running" && <RunProgress events={run.events} status={run.status} stages={ARTIST_STAGES} title="Cue is working through Qloo for you" />}
         {run.status === "error" && (
           <div className="card stack"><p className="error">{run.error}</p><div><button className="btn small" onClick={onRetry}>Try again</button></div></div>
         )}
@@ -339,15 +339,19 @@ function Matches({ run, onPitch, onRetry }) {
               if (!items.length) return null;
               return (
                 <section key={section.id} className="stack">
-                  <div className="section-head"><h3>{section.title}</h3><span>{section.hint}</span></div>
-                  {items.map((item) => (
-                    <article key={item.candidate.id} className="card match">
-                      <FitRing value={item.fit.value} />
+                  <div className="marquee"><h3>{section.title}</h3><span>{section.hint}</span></div>
+                  {items.map((item, index) => (
+                    <article key={item.candidate.id} className="card match poster-card reveal" style={{ animationDelay: `${index * 70}ms` }}>
+                      <Poster src={item.fit.inputs?.image_url} name={item.candidate.name} type={item.candidate.type} />
                       <div className="stack" style={{ gap: 4 }}>
                         <h3>{item.candidate.name} <span className="pill">{typeLabel(item.candidate.type)}</span>{BASIS_LABELS[item.fit.inputs?.basis] && <span className="pill warn" title="Qloo shows no taste lean toward your music here; only the audience's age and gender line up">{BASIS_LABELS[item.fit.inputs.basis]}</span>}</h3>
                         <p>{item.reason}</p>
+                        <Tags inputs={item.fit.inputs} />
                       </div>
-                      <button className="btn small ghost" onClick={() => onPitch(item)}>Write pitch</button>
+                      <div className="match-side">
+                        <FitRing value={item.fit.value} />
+                        <button className="btn small ghost" onClick={() => onPitch(item)}>Write pitch</button>
+                      </div>
                     </article>
                   ))}
                 </section>
@@ -363,6 +367,18 @@ function Matches({ run, onPitch, onRetry }) {
 }
 
 const BASIS_LABELS = { audience_only: "Audience match only", weak: "Weak match" };
+
+function Tags({ inputs }) {
+  const genres = inputs?.genres || [];
+  const themes = inputs?.themes || [];
+  if (!genres.length && !themes.length) return null;
+  return (
+    <div className="tags" aria-label="Qloo tags">
+      {genres.map((t) => <span className="tag" key={`g-${t}`}>{t}</span>)}
+      {themes.map((t) => <span className="tag theme" key={`t-${t}`}>{t}</span>)}
+    </div>
+  );
+}
 
 function Pitch({ item, artist, onBack }) {
   const [subject, setSubject] = useState(item.email_subject);
@@ -386,9 +402,11 @@ function Pitch({ item, artist, onBack }) {
     <div className="stack">
       <button className="linkish" onClick={onBack} style={{ justifySelf: "start" }}>← Back to matches</button>
       <div className="pitch-layout">
-        <aside className="card why">
+        <aside className="card why" style={inputs.image_url ? { "--poster": `url("${encodeURI(inputs.image_url)}")` } : undefined}>
           <div className="between"><span className="pill">{typeLabel(item.candidate.type)}</span><FitRing value={item.fit.value} size={44} /></div>
+          <Poster src={inputs.image_url} name={item.candidate.name} type={item.candidate.type} size="lg" />
           <h2>{item.candidate.name}</h2>
+          <Tags inputs={inputs} />
           <p className="small">Why it fits</p>
           <ul className="small">
             <li>{item.reason}</li>
@@ -420,7 +438,22 @@ export default function ArtistPage() {
   const [pitch, setPitch] = useState(null);
   const run = useRun();
 
+  const [trying, setTrying] = useState("");
+
   useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("try");
+    if (wanted) {
+      writeSaved(null);
+      setTrying(wanted);
+      setStep("trying");
+      post("/onboarding/name", { name: wanted, role: "singer" })
+        .then((f) => {
+          setFound({ ...f, typedName: wanted });
+          setStep("confirm");
+        })
+        .catch(() => setStep("connect"));
+      return;
+    }
     const saved = readSaved();
     if (saved?.signal_ids?.length) {
       setArtist(saved);
@@ -434,7 +467,7 @@ export default function ArtistPage() {
     run.start({ mode: "artist", signal_ids: artist.signal_ids, artist_name: artist.name, basis: artist.basis, route: artist.route, brief: text });
   };
 
-  const stepIndex = { connect: 0, confirm: 1, fans: 2, matches: 2, pitch: 2 }[step];
+  const stepIndex = { trying: 0, connect: 0, confirm: 1, fans: 2, matches: 2, pitch: 2 }[step];
   const nav = useMemo(
     () =>
       artist ? (
@@ -460,6 +493,9 @@ export default function ArtistPage() {
 
   return (
     <Shell right={nav}>
+      {step === "trying" && (
+        <div className="narrow"><div className="card loading"><span className="spinner" /><strong>Looking up {trying} in Qloo…</strong></div></div>
+      )}
       {step === "connect" && (
         <Connect
           onFound={(f) => {

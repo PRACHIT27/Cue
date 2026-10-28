@@ -20,6 +20,7 @@ export default function Trace({ events, status }) {
   const calls = events.filter((e) => e.kind === "qloo_call");
   const endpoints = new Set(calls.map((e) => e.endpoint));
   const hits = calls.filter((e) => e.cache === "hit").length;
+  const removed = events.filter((e) => e.kind === "guard_drop").length;
   const steps = events.filter((e) => e.kind !== "qloo_call" && !(e.kind === "step_start" && e.step !== "planner" && e.step !== "writer"));
   return (
     <aside className="trace card" aria-live="polite">
@@ -30,6 +31,7 @@ export default function Trace({ events, status }) {
       <p className="trace-count">
         <strong>{calls.length}</strong> Qloo calls across <strong>{endpoints.size}</strong> endpoints · {hits} from cache
       </p>
+      {removed > 0 && <span className="pill guard" style={{ justifySelf: "start" }}>{removed} removed by Cue's guards</span>}
       <ol className="trace-list">
         {events.length === 0 && <li className="muted">Steps and every Qloo call show up here as they happen.</li>}
         {events.map((event) =>
@@ -39,6 +41,10 @@ export default function Trace({ events, status }) {
               <span className="trace-type">{event.params?.["filter.type"]?.replace("urn:entity:", "").replace("urn:", "") || ""}</span>
               <span className={`chip-mini ${event.cache === "hit" ? "chip-hit" : ""}`}>{event.cache}</span>
               <span className="trace-ms">{event.ms} ms</span>
+            </li>
+          ) : event.kind === "guard_drop" ? (
+            <li key={event.seq} className="trace-step trace-guard_drop">
+              <span className="removed">{event.text}</span> {event.reason}
             </li>
           ) : steps.includes(event) ? (
             <li key={event.seq} className={`trace-step trace-${event.kind}`}>
