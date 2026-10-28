@@ -160,7 +160,7 @@ label.field .input, label.field textarea { font-weight: 400; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 /* ---- Cinema and music layer ---- */
-:root { --gold: #c99a3b; --gold-soft: #f8efdb; --night: #14111f; --font-serif: "Fraunces", Georgia, serif; }
+:root { --gold: #c99a3b; --gold-soft: #f8efdb; --night: #14111f; --font-serif: "Playfair Display", Georgia, serif; }
 
 .hero.cinema { padding-top: 40px; position: relative; }
 .hero h1 em { font-family: var(--font-serif), Georgia, serif; font-style: italic; font-weight: 600; letter-spacing: -0.01em; color: var(--accent); }
