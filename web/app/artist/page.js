@@ -156,15 +156,19 @@ function StandIn({ defaultName, onReady }) {
         Your artist name
         <input id="own-name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
+      <div className="stack" style={{ gap: 4 }}>
+        <strong style={{ color: "var(--ink)" }}>Artists you sound like</strong>
+        <span className="muted small">Pick artists whose music is close to yours, not just ones you like.</span>
+      </div>
       <div className="grid-3 fixed">
         {names.map((value, index) => (
           <label className="field" key={index} htmlFor={`like-${index}`}>
-            Artist {index + 1}
+            <span>Sounds like {index + 1}{index > 0 && <span className="muted small"> (optional)</span>}</span>
             <input
               id={`like-${index}`}
               className="input"
               value={value}
-              placeholder={index === 0 ? "e.g. an artist you resemble" : "Optional"}
+              placeholder={["e.g. Bon Iver", "e.g. Hozier", "e.g. Prateek Kuhad"][index]}
               onChange={(e) => setNames(names.map((n, i) => (i === index ? e.target.value : n)))}
             />
           </label>
