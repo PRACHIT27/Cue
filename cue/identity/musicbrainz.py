@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
@@ -16,6 +17,7 @@ DEFAULT_USER_AGENT = "Cue/0.1 (Qloo Agentic Hackathon; https://github.com/PRACHI
 CACHE_TTL_S = 30 * DAY_S
 MAX_RETRIES = 2
 KEY_VERSION = "mb:v1"
+SPOTIFY_ARTIST = re.compile(r"spotify\.com/(?:intl-[a-z-]+/)?artist/([A-Za-z0-9]{22})")
 
 
 @dataclass(frozen=True)
@@ -116,6 +118,26 @@ class MusicBrainzClient:
             artist = relation.get("artist") or {}
             if artist.get("id"):
                 return str(artist["id"])
+        return None
+
+    async def spotify_ids(self, mbid: str) -> set[str]:
+        if not mbid:
+            return set()
+        data = await self._get(f"/artist/{mbid}", {"inc": "url-rels"})
+        found: set[str] = set()
+        for relation in (data or {}).get("relations") or []:
+            match = SPOTIFY_ARTIST.search(((relation.get("url") or {}).get("resource")) or "")
+            if match:
+                found.add(match.group(1))
+        return found
+
+    async def find_mbid_for_spotify(self, spotify_id: str, name: str = "") -> str | None:
+        direct = await self.find_mbid_by_spotify(spotify_id)
+        if direct:
+            return direct
+        candidate = await self.find_mbid_by_name(name) if name.strip() else None
+        if candidate and spotify_id in await self.spotify_ids(candidate):
+            return candidate
         return None
 
 

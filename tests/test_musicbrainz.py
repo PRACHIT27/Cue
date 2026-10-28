@@ -123,3 +123,25 @@ def test_name_variants():
     assert name_variants("Shiv Kumar Sharma") == ["shiv kumar sharma", "shivkumar sharma"]
     assert name_variants("Rashid Khan") == ["rashid khan"]
     assert name_variants("") == []
+
+
+SPOTIFY_ID = "3GdSQUH1BRtl9UrrtuwJlP"
+NAMED = {"artists": [{"id": "MB-3", "name": "Fake Lyricist", "aliases": []}]}
+WITH_SPOTIFY = {"id": "MB-3", "relations": [{"url": {"resource": f"https://open.spotify.com/artist/{SPOTIFY_ID}"}}]}
+OTHER_SPOTIFY = {"id": "MB-3", "relations": [{"url": {"resource": "https://open.spotify.com/artist/0000000000000000000000"}}]}
+
+
+def test_spotify_lookup_falls_back_to_a_name_search_that_must_match_the_link():
+    fake = FakeMB([(404, {}), (200, NAMED), (200, WITH_SPOTIFY)])
+    assert asyncio.run(client(fake).find_mbid_for_spotify(SPOTIFY_ID, "Fake Lyricist")) == "MB-3"
+
+
+def test_name_search_with_a_different_spotify_link_is_rejected():
+    fake = FakeMB([(404, {}), (200, NAMED), (200, OTHER_SPOTIFY)])
+    assert asyncio.run(client(fake).find_mbid_for_spotify(SPOTIFY_ID, "Fake Lyricist")) is None
+
+
+def test_direct_spotify_lookup_needs_no_name():
+    fake = FakeMB([(200, URL)])
+    assert asyncio.run(client(fake).find_mbid_for_spotify(SPOTIFY_ID)) == "MB-2"
+    assert len(fake.requests) == 1

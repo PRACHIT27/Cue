@@ -91,6 +91,15 @@ On macOS or Linux, use `.venv/bin/` instead of `.venv/Scripts/`.
 ```
 
 Add `--trace` to see every step and Qloo call, and `--json out.json` to save the full result.
+
+### Run the API
+
+```bash
+.venv/Scripts/python -m uvicorn cue.api.app:app --port 8000
+```
+
+Then open `http://localhost:8000/docs` to try onboarding (`/onboarding/spotify`, `/onboarding/name`,
+`/onboarding/sounds-like`) and runs (`POST /runs`, then `GET /runs/{id}/events` for the live stream).
 Each run prints what it cost in Claude calls. Cue never sends anything: pitches are drafts the
 artist reviews and sends.
 

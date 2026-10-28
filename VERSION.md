@@ -17,6 +17,33 @@ Action required: what someone must do because of this (or "none").
 
 ---
 
+## v1.5.0 — 27 Oct 2026 — Prachit
+
+MINOR: WU-07, the API (`cue/api/`), with onboarding routes 1 to 3.
+- **Runs:** `POST /runs` starts an artist or supervisor run and returns a run ID; `GET /runs/{id}/events`
+  streams every event over server-sent events (an `onboarding` event first when the site passes
+  `route`, then `run_end` last); `GET /runs/{id}` returns status, the result, seconds, the Qloo call
+  count and the endpoints used. Artist results come grouped by `section`; supervisor results carry
+  `SHORTLIST_LABEL`. At most 3 runs at once; runs are kept in memory for two hours.
+- **Onboarding:** `POST /onboarding/spotify` (Route 1: Qloo by Spotify ID; Route 2: MusicBrainz MBID,
+  then Qloo by MBID), `POST /onboarding/name` (lyricists search person, then author entries),
+  `POST /onboarding/sounds-like` (Route 3 stand-in, exact names only). Every result merges entries
+  sharing an MBID, with the artist entry first and the rest in `related_ids`.
+- **Also:** `GET /artists/{id}/profile` (the entry's own tags by group, plus age and gender lean),
+  `POST /productions/search`, `GET /health`.
+- `cue/identity/musicbrainz.py` gains `spotify_ids(mbid)` and `find_mbid_for_spotify(spotify_id, name)`,
+  which falls back to a name search that must match the Spotify link. The onboarding lookups live in
+  `cue/api/onboarding.py`, not the §7.1 contract (PRD Q-8 is still open).
+- Checked live: Prateek Kuhad by Spotify (Route 1, person entry merged), Irshad Kamil by Spotify as a
+  lyricist (Route 2), Amitabh Bhattacharya by name, a stand-in from Anuv Jain and When Chai Met Toast,
+  and a full artist run (31 s, 19 Qloo calls, 9 pitches, first event after 0.5 s).
+- New: `fastapi` and `uvicorn` in requirements; `LLM_BUDGET_USD`, `CUE_WEB_ORIGINS`,
+  `MUSICBRAINZ_USER_AGENT` in `.env.example`.
+
+Action required:
+- Deploy (WU-13): runs live in one process's memory, so Cloud Run needs a single instance (max 1)
+  until runs move to Supabase (S4.2).
+
 ## v1.4.6 — 24 Oct 2026 — Vedant
 
 A command-line runner, and steadier writing.
