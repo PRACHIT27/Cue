@@ -159,7 +159,6 @@ label.field .input, label.field textarea { font-weight: 400; }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-/* ---- Cinema and music layer ---- */
 :root { --gold: #c99a3b; --gold-soft: #f8efdb; --night: #14111f; --font-serif: "Playfair Display", Georgia, serif; }
 
 .hero.cinema { padding-top: 40px; position: relative; }
@@ -248,7 +247,6 @@ label.field .input, label.field textarea { font-weight: 400; }
 }
 
 
-/* ---- Backdrop: paper, warm light, a music staff, a ghost record, film grain ---- */
 .backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
 .backdrop .spot { position: absolute; inset: 0;
   background: radial-gradient(70vw 60vh at 85% -5%, rgba(255, 226, 170, 0.55), transparent 70%); }
@@ -267,7 +265,6 @@ label.field .input, label.field textarea { font-weight: 400; }
 .backdrop .grain { position: absolute; inset: 0; opacity: 0.35; mix-blend-mode: multiply;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.2  0 0 0 0 0.15  0 0 0 0 0.1  0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
 
-/* ---- Home: a dark screening-room stage under the top bar ---- */
 .tone-home .topbar { position: absolute; top: 0; left: 0; right: 0; z-index: 3; }
 .tone-home .logo-word { color: #fbf7ef; }
 .tone-home .page { padding-top: 0; }
@@ -298,7 +295,6 @@ label.field .input, label.field textarea { font-weight: 400; }
 }
 
 
-/* ---- Fan dashboard ---- */
 .fan-hero { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(250px, 320px); gap: 26px; align-items: center; padding: 28px;
   background: var(--night); border-color: var(--night); color: #cfc8dc; position: relative; overflow: hidden; isolation: isolate; }
 .fan-hero::before { content: ""; position: absolute; inset: -40px; z-index: -1; background-image: var(--poster, none); background-size: cover; background-position: center;

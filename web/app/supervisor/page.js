@@ -80,7 +80,6 @@ function Brief({ role, preset, onFind }) {
 
   useEffect(() => {
     if (preset?.query) lookUp(preset.query);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const submit = (event) => {

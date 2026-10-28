@@ -133,8 +133,6 @@ def create_app(manager: RunManager | None = None, musicbrainz: Any = None) -> Fa
 
     @app.get("/artists/{entity_id}/similar")
     async def artist_similar(entity_id: str) -> dict[str, Any]:
-        """The artists an artist run compares against: the same similar_artists call the planner makes."""
-
         async def work():
             ids = await similar_artists([entity_id])
             return ids, (await get_entities(ids) if ids else [])
