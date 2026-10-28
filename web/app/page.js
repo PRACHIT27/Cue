@@ -10,22 +10,27 @@ const TRIES = [
 
 export default function Welcome() {
   return (
-    <Shell>
-      <section className="hero cinema">
-        <span className="marquee-badge">★ Powered by Qloo taste data ★</span>
-        <h1>
-          Get your music where your
-          <br />
-          <em>fans already are.</em>
-        </h1>
-        <p className="lede">Cue matches artists with the shows, films, games, podcasts and brands whose audiences already love their sound.</p>
-        <div className="equalizer" aria-hidden="true">
-          {BARS.map((i) => (
-            <span key={i} style={{ animationDelay: `${(i * 137) % 900}ms`, animationDuration: `${900 + ((i * 211) % 700)}ms` }} />
-          ))}
-        </div>
-      </section>
-      <div className="filmstrip" aria-hidden="true" />
+    <Shell tone="home">
+      <div className="stage">
+        <span className="beam left" aria-hidden="true" />
+        <span className="beam right" aria-hidden="true" />
+        <span className="stage-bulbs top" aria-hidden="true" />
+        <section className="hero cinema">
+          <span className="marquee-badge">★ Powered by Qloo taste data ★</span>
+          <h1>
+            Get your music where your
+            <br />
+            <em>fans already are.</em>
+          </h1>
+          <p className="lede">Cue matches artists with the shows, films, games, podcasts and brands whose audiences already love their sound.</p>
+          <div className="equalizer" aria-hidden="true">
+            {BARS.map((i) => (
+              <span key={i} style={{ animationDelay: `${(i * 137) % 900}ms`, animationDuration: `${900 + ((i * 211) % 700)}ms` }} />
+            ))}
+          </div>
+        </section>
+        <div className="filmstrip" aria-hidden="true" />
+      </div>
       <section className="choices">
         <Link href="/artist" className="choice dark">
           <span className="choice-icon" style={{ background: "#4f3cf0", color: "#fff" }} aria-hidden="true">♪</span>
