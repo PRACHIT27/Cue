@@ -1,20 +1,22 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable, Mapping
 
 from cue.agents.common.llm import structured
 from cue.agents.planner import TOOLS, Decision, run_planner
 from cue.agents.writer import ArtistFacts, write_pitches
 from cue.guards import Drop
-from cue.guards.content import remove_explicit
+from cue.guards.content import is_explicit, remove_explicit
 from cue.harness.events import RunEvents
 from cue.harness.executor import CallResult, execute
 from cue.harness.plan import Plan, PlannedCall
 from cue.records import FitScore, Match, PitchKit
 from cue.scoring.fit import score_matches
 from cue.scoring.lift import audience_similarity, lift_scores
-from cue.tools.records import Demographics, InsightsItem, InsightsRequest, InsightsResult
+from cue.tools import get_entities
+from cue.tools.names import normalise_name
+from cue.tools.records import Demographics, Entity, InsightsItem, InsightsRequest, InsightsResult
 
 PICKS_PER_SECTION = 3
 MAX_PER_TYPE_IN_SECTION = 2
@@ -26,6 +28,11 @@ AGE_LABELS = {
     "45_to_54": "45–54",
     "55_and_older": "55 and over",
 }
+GENRE_TAGS = ("urn:tag:genre:qloo", "urn:tag:subgenre:qloo", "urn:tag:genre:media")
+THEME_TAGS = ("urn:tag:theme:qloo", "urn:tag:emotional_tone:qloo")
+MAX_GENRES = 3
+MAX_THEMES = 3
+ARTIST_TOOLS = {**TOOLS, "get_entities": get_entities}
 LLMCall = Callable[..., Awaitable[dict[str, Any]]]
 
 
@@ -64,6 +71,21 @@ def describe_listeners(profile: Demographics | None) -> str:
     if lean[0] and lean[1] >= 0.1:
         parts.append(f"lean {lean[0]}")
     return ", ".join(parts)
+
+
+def _pick_names(entity: Entity, kinds: tuple[str, ...], limit: int) -> list[str]:
+    seen: dict[str, str] = {}
+    for kind in kinds:
+        for tag in entity.tags:
+            if tag.type == kind and not is_explicit(tag.name) and tag.name.lower() != "podcasts":
+                seen.setdefault(normalise_name(tag.name), tag.name)
+    return list(seen.values())[:limit]
+
+
+def production_tags(entity: Entity | None) -> dict[str, list[str]]:
+    if entity is None:
+        return {"genres": [], "themes": []}
+    return {"genres": _pick_names(entity, GENRE_TAGS, MAX_GENRES), "themes": [t.lower() for t in _pick_names(entity, THEME_TAGS, MAX_THEMES)]}
 
 
 def candidates_by_type(results: Mapping[str, CallResult]) -> dict[str, list[InsightsItem]]:
@@ -106,7 +128,7 @@ async def run_artist(
     brief: str = "",
     basis: str = "measured",
     llm: LLMCall = structured,
-    tools: Mapping[str, Callable[..., Awaitable[Any]]] = TOOLS,
+    tools: Mapping[str, Callable[..., Awaitable[Any]]] = ARTIST_TOOLS,
 ) -> ArtistRun:
     source_id = signal_ids[0]
     planned = await run_planner(signal_ids, artist_name, events, brief=brief, basis=basis, llm=llm, tools=tools)
@@ -151,6 +173,10 @@ async def run_artist(
     scored = [(m, by_match[m.match_id]) for m in matches]
 
     picks = choose_picks(scored)
+    if picks:
+        details = await execute(Plan((PlannedCall("pick_tags", "get_entities", {"ids": [m.candidate.id for m, _ in picks]}),)), tools, events)
+        entities = {e.ref.id: e for e in (_ok(details, "pick_tags") or [])}
+        picks = [(m, replace(f, inputs={**f.inputs, **production_tags(entities.get(m.candidate.id))})) for m, f in picks]
     events.emit("step_start", step="writer", tool="writer", picks=len(picks))
     written = await write_pitches(ArtistFacts(source_id, artist_name, basis, describe_listeners(profile)), picks, llm=llm, brief=brief)
     events.emit("step_end", step="writer", tool="writer", status="ok", pitches=len(written.items))

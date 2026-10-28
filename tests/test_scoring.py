@@ -1,7 +1,7 @@
 import pytest
 
 from cue.records import Match
-from cue.scoring.fit import lift_ranks, score_match, score_matches
+from cue.scoring.fit import lift_ranks, match_basis, score_match, score_matches
 from cue.scoring.lift import audience_similarity, lift_scores
 from cue.scoring.sections import section_of
 from cue.tools.records import Demographics, EntityRef, InsightsItem, InsightsRequest, InsightsResult
@@ -113,3 +113,18 @@ def test_score_matches_is_deterministic():
     matches = [Match("A-1", show(f"S-{i}", 0.5 + i / 100), 0.95, audience=0.5) for i in range(5)]
     lifts = {f"S-{i}": i / 100 for i in range(5)}
     assert score_matches(matches, lifts) == score_matches(matches, lifts)
+
+
+def test_match_basis_says_what_the_score_rests_on():
+    assert match_basis(0.02, 0.9) == "taste"
+    assert match_basis(0.0, 0.9) == "audience_only"
+    assert match_basis(-0.01, 0.9) == "audience_only"
+    assert match_basis(None, 0.9) == "audience_only"
+    assert match_basis(-0.01, None) == "weak"
+
+
+def test_a_high_fit_with_no_taste_lean_is_labelled_audience_only():
+    matches = [Match("A-1", show("good", 0.5), 0.95, audience=0.9), Match("A-1", show("flat", 0.5), 0.95, audience=0.95)]
+    scores = {s.match_id: s for s in score_matches(matches, {"good": 0.03, "flat": -0.01})}
+    assert scores["A-1:good"].inputs["basis"] == "taste"
+    assert scores["A-1:flat"].inputs["basis"] == "audience_only"

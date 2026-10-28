@@ -344,7 +344,7 @@ function Matches({ run, onPitch, onRetry }) {
                     <article key={item.candidate.id} className="card match">
                       <FitRing value={item.fit.value} />
                       <div className="stack" style={{ gap: 4 }}>
-                        <h3>{item.candidate.name} <span className="pill">{typeLabel(item.candidate.type)}</span></h3>
+                        <h3>{item.candidate.name} <span className="pill">{typeLabel(item.candidate.type)}</span>{BASIS_LABELS[item.fit.inputs?.basis] && <span className="pill warn" title="Qloo shows no taste lean toward your music here; only the audience's age and gender line up">{BASIS_LABELS[item.fit.inputs.basis]}</span>}</h3>
                         <p>{item.reason}</p>
                       </div>
                       <button className="btn small ghost" onClick={() => onPitch(item)}>Write pitch</button>
@@ -361,6 +361,8 @@ function Matches({ run, onPitch, onRetry }) {
     </div>
   );
 }
+
+const BASIS_LABELS = { audience_only: "Audience match only", weak: "Weak match" };
 
 function Pitch({ item, artist, onBack }) {
   const [subject, setSubject] = useState(item.email_subject);
@@ -392,6 +394,7 @@ function Pitch({ item, artist, onBack }) {
             <li>{item.reason}</li>
             {section && <li>{section.title}: {section.hint.toLowerCase()}</li>}
             {typeof inputs.audience === "number" && <li>Audience age and gender match: {Math.round(inputs.audience * 100)}%</li>}
+            {BASIS_LABELS[inputs.basis] && <li>{BASIS_LABELS[inputs.basis]}: Qloo shows no taste lean toward your music here</li>}
           </ul>
         </aside>
         <div className="card stack">
