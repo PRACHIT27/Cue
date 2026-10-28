@@ -164,7 +164,7 @@ function StandIn({ defaultName, onReady }) {
               id={`like-${index}`}
               className="input"
               value={value}
-              placeholder={index === 0 ? "e.g. an artist you love" : "Optional"}
+              placeholder={index === 0 ? "e.g. an artist you resemble" : "Optional"}
               onChange={(e) => setNames(names.map((n, i) => (i === index ? e.target.value : n)))}
             />
           </label>
