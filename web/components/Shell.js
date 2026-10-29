@@ -4,7 +4,12 @@ import Logo from "./Logo";
 export default function Shell({ tone = "artist", right = null, children }) {
   return (
     <div className={`shell tone-${tone}`}>
-      <div className="glow" aria-hidden="true" />
+      <div className="backdrop" aria-hidden="true">
+        <span className="spot" />
+        <span className="staff" />
+        <span className="vinyl" />
+        <span className="grain" />
+      </div>
       <header className="topbar">
         <Link href="/" className="home-link">
           <Logo />

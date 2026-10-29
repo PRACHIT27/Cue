@@ -231,6 +231,7 @@ async def run_supervisor(
             "genres": genres,
             "styles": styles,
             "fans_also_watch": also_listen(explanation, similar_names),
+            "image_url": next((c.image_url for c in candidates if c.image_url), None),
         }
         shortlisted.append((match, replace(fit, inputs={**fit.inputs, **extra})))
         if len(shortlisted) == SHORTLIST:

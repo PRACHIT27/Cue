@@ -26,6 +26,12 @@ def lift_ranks(lifts: Mapping[str, float]) -> dict[str, float]:
     return {key: round(1 - position[value] / last, 6) for key, value in lifts.items()}
 
 
+def match_basis(lift: float | None, audience: float | None) -> str:
+    if lift is not None and lift > 0:
+        return "taste"
+    return "audience_only" if audience is not None else "weak"
+
+
 def score_matches(matches: list[Match], lifts: Mapping[str, float | None]) -> list[FitScore]:
     by_section: dict[str, list[Match]] = {}
     for match in matches:
@@ -46,6 +52,7 @@ def score_matches(matches: list[Match], lifts: Mapping[str, float | None]) -> li
                 "audience": match.audience,
                 "affinity": match.affinity,
                 "popularity": match.candidate.popularity,
+                "basis": match_basis(lift, match.audience),
             }
             status = "ok" if value is not None else "insufficient_data"
             scores.append(FitScore(match.match_id, value, status, inputs))

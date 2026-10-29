@@ -35,6 +35,10 @@ class ArtistFacts:
 
 def _match_line(alias: str, match: Match, fit: FitScore) -> str:
     facts = [f"{TYPE_LABELS.get(match.candidate.type, 'production')}, {SECTION_LABELS.get(fit.inputs.get('section'), '')}"]
+    if fit.inputs.get("genres"):
+        facts.append("Qloo genres: " + ", ".join(fit.inputs["genres"]))
+    if fit.inputs.get("themes"):
+        facts.append("Qloo themes: " + ", ".join(fit.inputs["themes"]))
     lift = fit.inputs.get("lift")
     if lift is not None and lift > 0:
         facts.append("people who watch or play it like this artist's kind of music more than fans of similar artists do")
