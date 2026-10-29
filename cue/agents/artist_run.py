@@ -84,8 +84,12 @@ def _pick_names(entity: Entity, kinds: tuple[str, ...], limit: int) -> list[str]
 
 def production_tags(entity: Entity | None) -> dict[str, list[str]]:
     if entity is None:
-        return {"genres": [], "themes": []}
-    return {"genres": _pick_names(entity, GENRE_TAGS, MAX_GENRES), "themes": [t.lower() for t in _pick_names(entity, THEME_TAGS, MAX_THEMES)]}
+        return {"genres": [], "themes": [], "image_url": None}
+    return {
+        "genres": _pick_names(entity, GENRE_TAGS, MAX_GENRES),
+        "themes": [t.lower() for t in _pick_names(entity, THEME_TAGS, MAX_THEMES)],
+        "image_url": entity.image_url,
+    }
 
 
 def candidates_by_type(results: Mapping[str, CallResult]) -> dict[str, list[InsightsItem]]:

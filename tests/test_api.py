@@ -239,3 +239,19 @@ def test_health_reports_demo_mode():
     m, _ = manager()
     body = TestClient(create_app(m, FakeMusicBrainz())).get("/health").json()
     assert body == {"ok": True, "demo_mode": False, "runs": 0}
+
+
+def test_similar_artists_are_the_comparison_group_with_images():
+    near = [raw_entity(f"S-{i}", f"Similar {i}", "urn:entity:artist") for i in range(1, 6)]
+    near[0]["properties"]["image"] = {"url": "https://images.example/s1.jpg"}
+    m, fake = manager(
+        {
+            ("/v2/insights", "filter.type", "urn:entity:artist"): {"results": {"entities": [ARTIST_ENTRY, *near]}},
+            ("/entities", None, None): {"results": list(reversed(near))},
+        }
+    )
+    body = TestClient(create_app(m, FakeMusicBrainz())).get("/artists/A-1/similar").json()
+    names = [a["name"] for a in body["artists"]]
+    assert "Example Artist" not in names and len(names) == 4
+    assert names == ["Similar 1", "Similar 2", "Similar 3", "Similar 4"]
+    assert body["artists"][0]["image_url"] == "https://images.example/s1.jpg"

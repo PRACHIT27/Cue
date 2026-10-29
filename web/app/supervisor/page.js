@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import FitRing from "../../components/FitRing";
+import Poster from "../../components/Poster";
+import RunProgress, { SUPERVISOR_STAGES } from "../../components/RunProgress";
 import Shell from "../../components/Shell";
+import SpotifyPlayer, { spotifyArtistId } from "../../components/SpotifyPlayer";
 import Trace from "../../components/Trace";
 import { get, post, useRun } from "../../lib/api";
-import { initials, typeLabel } from "../../lib/labels";
+import { typeLabel } from "../../lib/labels";
 
 const ROLES = [
   { id: "producer", title: "Producer or music supervisor", hint: "Music for TV, film, ads or games", type: "tv_show", icon: "▣" },
@@ -48,32 +51,36 @@ function WhatYouDo({ onNext }) {
   );
 }
 
-function Brief({ role, onFind }) {
-  const [type, setType] = useState(role.type);
+function Brief({ role, preset, onFind }) {
+  const [type, setType] = useState(preset?.type || role.type);
   const [project, setProject] = useState("");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(preset?.query || "");
   const [vibes, setVibes] = useState([]);
   const [candidates, setCandidates] = useState(null);
   const [picked, setPicked] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const lookUp = async () => {
+  const lookUp = async (name = query) => {
     setError("");
     setPicked(null);
-    if (!query.trim()) return setError("Type a show, film, podcast, game or brand your audience loves.");
+    if (!name.trim()) return setError("Type a show, film, podcast, game or brand your audience loves.");
     setBusy(true);
     try {
-      const found = await post("/productions/search", { name: query.trim(), type });
+      const found = await post("/productions/search", { name: name.trim(), type });
       setCandidates(found.candidates);
-      if (found.candidates.length === 1) setPicked(found.candidates[0]);
-      if (!found.candidates.length) setError(`Qloo has no ${TYPES.find((t) => t.id === type).label.toLowerCase()} called "${query.trim()}". Check the spelling or the type.`);
+      if (found.candidates.length >= 1) setPicked(found.candidates[0]);
+      if (!found.candidates.length) setError(`Qloo has no ${TYPES.find((t) => t.id === type).label.toLowerCase()} called "${name.trim()}". Check the spelling or the type.`);
     } catch (failure) {
       setError(`Couldn't reach Cue: ${failure.message}`);
     } finally {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (preset?.query) lookUp(preset.query);
+  }, []);
 
   const submit = (event) => {
     event.preventDefault();
@@ -101,7 +108,7 @@ function Brief({ role, onFind }) {
           Which one? <span className="muted small">We look it up in Qloo</span>
           <div className="row" style={{ flexWrap: "nowrap" }}>
             <input id="audience-like" className="input" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); lookUp(); } }} placeholder="e.g. Bandish Bandits" />
-            <button type="button" className="btn ghost small" onClick={lookUp} disabled={busy}>{busy ? "…" : "Look up"}</button>
+            <button type="button" className="btn ghost small" onClick={() => lookUp()} disabled={busy}>{busy ? "…" : "Look up"}</button>
           </div>
         </label>
         {candidates && candidates.length > 1 && (
@@ -136,7 +143,7 @@ function Shortlist({ search, run }) {
     get(`/artists/${search.production.id}/profile`).then(setProfile).catch(() => setProfile(null));
   }, [search.production.id]);
   const tags = profile?.tags || {};
-  const loves = [...(tags.genre || []), ...(tags.keyword || []), ...(tags.theme || [])].filter((t, i, all) => all.indexOf(t) === i).slice(0, 8);
+  const loves = [...(tags.genre || []), ...(tags.subgenre || []), ...(tags.theme || [])].filter((t, i, all) => all.indexOf(t) === i).slice(0, 8);
 
   return (
     <div className="layout-run">
@@ -156,28 +163,10 @@ function Shortlist({ search, run }) {
             <div className="chips">{loves.map((t) => <span className="chip" key={t}>{t}</span>)}</div>
           </div>
         )}
-        {run.status === "running" && <div className="card loading"><span className="spinner" /><strong>Asking Qloo who this audience listens to…</strong><span className="muted small">About 30 seconds, including a MusicBrainz check on each artist.</span></div>}
+        {run.status === "running" && <RunProgress events={run.events} status={run.status} stages={SUPERVISOR_STAGES} title="Cue is finding artists this audience loves" />}
         {run.status === "error" && <p className="card error">{run.error}</p>}
         {result && result.artists.length === 0 && <p className="note">No under-the-radar artists came back for this audience. Try a different show or brand.</p>}
-        {result && result.artists.map((item) => {
-          const inputs = item.fit.inputs || {};
-          return (
-            <article key={item.candidate.id} className="card match">
-              <span className="avatar small">{initials(item.candidate.name)}</span>
-              <div className="stack" style={{ gap: 4 }}>
-                <h3>
-                  {item.candidate.name}
-                  {inputs.life_span === "unverified" && <span className="pill warn" title="MusicBrainz had no record, so we couldn't confirm they're still active">Unverified</span>}
-                </h3>
-                <p>{item.reason}</p>
-              </div>
-              <div className="row" style={{ justifyContent: "flex-end" }}>
-                <FitRing value={item.fit.value} size={44} />
-                {inputs.spotify_url ? <a className="btn small" href={inputs.spotify_url} target="_blank" rel="noreferrer">Listen</a> : <span className="muted small">No Spotify link</span>}
-              </div>
-            </article>
-          );
-        })}
+        {result && result.artists.map((item, index) => <ArtistCard key={item.candidate.id} item={item} index={index} />)}
         {result && <p className="muted small">{result.matches_scored} artists scored with Qloo data in {run.summary.seconds} s. Popularity capped at {Math.round(result.cap * 100)}.</p>}
       </div>
       <Trace events={run.events} status={run.status} />
@@ -185,11 +174,57 @@ function Shortlist({ search, run }) {
   );
 }
 
+function ArtistCard({ item, index }) {
+  const [playing, setPlaying] = useState(false);
+  const inputs = item.fit.inputs || {};
+  const spotifyId = spotifyArtistId(inputs.spotify_url);
+  const genres = inputs.genres || [];
+  const styles = inputs.styles || [];
+  return (
+    <article className="card match poster-card reveal" style={{ animationDelay: `${index * 70}ms` }}>
+      <Poster src={inputs.image_url} name={item.candidate.name} type="urn:entity:artist" />
+      <div className="stack" style={{ gap: 4 }}>
+        <h3>
+          {item.candidate.name}
+          {inputs.life_span === "unverified" && <span className="pill warn" title="MusicBrainz had no record, so we couldn't confirm they're still active">Unverified</span>}
+        </h3>
+        <p>{item.reason}</p>
+        {(genres.length > 0 || styles.length > 0) && (
+          <div className="tags" aria-label="Qloo tags">
+            {genres.map((t) => <span className="tag" key={`g-${t}`}>{t}</span>)}
+            {styles.map((t) => <span className="tag theme" key={`s-${t}`}>{t}</span>)}
+          </div>
+        )}
+      </div>
+      <div className="match-side">
+        <FitRing value={item.fit.value} size={44} />
+        {spotifyId ? (
+          <button className="btn small" aria-expanded={playing} onClick={() => setPlaying(!playing)}>{playing ? "Hide player" : "▶ Listen"}</button>
+        ) : (
+          <span className="muted small">No Spotify link</span>
+        )}
+      </div>
+      {playing && spotifyId && <SpotifyPlayer id={spotifyId} name={item.candidate.name} />}
+    </article>
+  );
+}
+
 export default function SupervisorPage() {
   const [step, setStep] = useState("role");
   const [role, setRole] = useState(null);
   const [search, setSearch] = useState(null);
+  const [preset, setPreset] = useState(null);
   const run = useRun();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get("try");
+    if (!wanted) return;
+    const type = params.get("type") || "tv_show";
+    setRole(ROLES.find((r) => r.type === type) || ROLES[0]);
+    setPreset({ query: wanted, type });
+    setStep("brief");
+  }, []);
 
   return (
     <Shell tone="supervisor" right={step === "shortlist" ? <button className="btn ghost small" onClick={() => setStep("brief")}>Edit brief</button> : null}>
@@ -197,6 +232,7 @@ export default function SupervisorPage() {
       {step === "brief" && role && (
         <Brief
           role={role}
+          preset={preset}
           onFind={(s) => {
             setSearch(s);
             setStep("shortlist");

@@ -129,7 +129,7 @@ def fake_tools():
             TagRef("t4", "Sex comedy", "urn:tag:genre:media"),
             TagRef("t5", "Male wears underwear", "urn:tag:keyword:media"),
         )
-        return [Entity(show(i), tags=tags) for i in ids]
+        return [Entity(show(i), image_url=f"https://img/{i}.jpg", tags=tags) for i in ids]
 
     return {"similar_artists": similar_artists, "insights_group": insights_group, "insights_section": insights_section, "find_tags": find_tags, "demographics": demographics, "get_entities": get_entities}
 
@@ -147,7 +147,7 @@ def test_run_artist_end_to_end_with_fakes():
     assert gem.inputs["lift"] == pytest.approx(0.05) and gem.inputs["section"] == "indie_gems" and gem.inputs["audience"] == 1.0
     picked = run.kit.items[0].fit.inputs
     assert picked["genres"] == ["Comedy", "Teen dramedy"] and picked["themes"] == ["coming of age"]
-    assert picked["basis"] in ("taste", "audience_only")
+    assert picked["basis"] in ("taste", "audience_only") and picked["image_url"].startswith("https://img/")
     kinds = [e["kind"] for e in events]
     assert kinds[-1] == "result" and "guard_drop" in kinds
     assert all(e["run_id"] == "r_e2e" for e in events)
