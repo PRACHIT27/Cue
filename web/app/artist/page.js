@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import FitRing from "../../components/FitRing";
+import Poster from "../../components/Poster";
+import RunProgress, { ARTIST_STAGES } from "../../components/RunProgress";
 import Shell, { Steps } from "../../components/Shell";
 import Trace from "../../components/Trace";
 import { get, post, useRun } from "../../lib/api";
@@ -154,15 +156,19 @@ function StandIn({ defaultName, onReady }) {
         Your artist name
         <input id="own-name" className="input" value={name} onChange={(e) => setName(e.target.value)} />
       </label>
+      <div className="stack" style={{ gap: 4 }}>
+        <strong style={{ color: "var(--ink)" }}>Artists you sound like</strong>
+        <span className="muted small">Pick artists whose music is close to yours, not just ones you like.</span>
+      </div>
       <div className="grid-3 fixed">
         {names.map((value, index) => (
           <label className="field" key={index} htmlFor={`like-${index}`}>
-            Artist {index + 1}
+            <span>Sounds like {index + 1}{index > 0 && <span className="muted small"> (optional)</span>}</span>
             <input
               id={`like-${index}`}
               className="input"
               value={value}
-              placeholder={index === 0 ? "e.g. an artist you love" : "Optional"}
+              placeholder={["e.g. Bon Iver", "e.g. Hozier", "e.g. Prateek Kuhad"][index]}
               onChange={(e) => setNames(names.map((n, i) => (i === index ? e.target.value : n)))}
             />
           </label>
@@ -219,8 +225,34 @@ function Confirm({ found, onConfirm, onBack }) {
   );
 }
 
+const LEVELS = [
+  [0.25, "Far more than average"],
+  [0.05, "More than average"],
+  [-0.05, "About average"],
+  [-0.25, "Fewer than average"],
+  [-Infinity, "Far fewer than average"],
+];
+
+function level(value) {
+  return LEVELS.find(([floor]) => value >= floor)[1];
+}
+
+function compact(n) {
+  if (n == null) return "—";
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)}K`;
+  return String(n);
+}
+
+function distinct(list) {
+  const key = (t) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return list.filter((t, i, all) => all.findIndex((x) => key(x) === key(t)) === i);
+}
+
 function Fans({ artist, onStart }) {
   const [profile, setProfile] = useState(null);
+  const [similar, setSimilar] = useState(null);
   const [error, setError] = useState("");
   const [brief, setBrief] = useState("");
 
@@ -229,68 +261,138 @@ function Fans({ artist, onStart }) {
     get(`/artists/${artist.profile_id}/profile`)
       .then((p) => live && setProfile(p))
       .catch((failure) => live && setError(failure.message));
+    get(`/artists/${artist.profile_id}/similar`)
+      .then((s) => live && setSimilar(s.artists || []))
+      .catch(() => live && setSimilar([]));
     return () => {
       live = false;
     };
   }, [artist.profile_id]);
 
-  const age = profile?.demographics?.age || {};
-  const peak = peakAge(age);
+  const entity = profile?.entity || {};
   const tags = profile?.tags || {};
-  const interests = [...(tags.genre || []), ...(tags.style || []), ...(tags.subgenre || [])].filter((t, i, all) => all.indexOf(t) === i).slice(0, 8);
-  const moods = [...(tags.music || []), ...(tags.characteristic || [])].filter((t, i, all) => all.indexOf(t) === i).slice(0, 6);
+  const genres = distinct([...(tags.genre || []), ...(tags.subgenre || [])]).slice(0, 6);
+  const sound = distinct([...(tags.music || []), ...(tags.characteristic || []), ...(tags.style || []).filter((s) => !s.includes(" "))]).slice(0, 8);
+  const themes = (tags.theme || []).slice(0, 6);
   const audience = tags.audience || [];
-  const ageValues = Object.values(age);
-  const maxAge = Math.max(0.0001, ...ageValues.map((v) => v + 1));
+  const instruments = tags.instrument || [];
+  const influences = tags.influenced_by || [];
+  const age = profile?.demographics?.age || {};
+  const female = profile?.demographics?.gender?.female;
+  const peak = peakAge(age);
+  const listeners = entity.lastfm_listeners;
+  const plays = entity.lastfm_scrobbles;
+  const popularity = entity.ref?.popularity;
+  const backdrop = entity.image_url || artist.image;
 
   return (
     <>
-      <div className="between">
-        <div className="stack" style={{ gap: 4 }}>
-          <span className="muted">Hi {artist.name}</span>
-          <h2>Here's who loves your music</h2>
-          {artist.basis === "projected" && <p className="muted small">Based on fans of {artist.resemble?.join(", ")}, the artists you resemble.</p>}
-        </div>
-      </div>
       {error && <p className="error">Couldn't load your fan profile: {error}</p>}
       {!profile && !error && (
         <div className="loading"><span className="spinner" /><span className="muted">Reading your fans from Qloo…</span></div>
       )}
       {profile && (
         <>
-          <div className="grid-3">
-            <div className="card stat dark"><span>Fans' top taste</span><strong>{interests[0] || "—"}</strong></div>
-            <div className="card stat"><span className="muted">Mostly aged</span><strong>{peak ? AGE_LABELS[peak] : "—"}</strong></div>
-            <div className="card stat"><span className="muted">Last.fm listeners</span><strong>{profile.entity.lastfm_listeners ? profile.entity.lastfm_listeners.toLocaleString() : "—"}</strong></div>
-          </div>
-          <div className="grid-3">
+          <section className="card fan-hero" style={backdrop ? { "--poster": `url("${encodeURI(backdrop)}")` } : undefined}>
+            <Poster src={backdrop} name={artist.name} type="urn:entity:artist" size="xl" />
+            <div className="stack" style={{ gap: 8 }}>
+              <span className="fan-hi">Hi {artist.name}</span>
+              <h2>Here's who loves your music</h2>
+              {entity.description && <p className="fan-desc">{entity.description}</p>}
+              {artist.basis === "projected" && <p className="fan-desc">Based on fans of {artist.resemble?.join(", ")}, the artists you sound like.</p>}
+              {genres.length > 0 && <div className="chips">{genres.map((t) => <span className="chip" key={t}>{t}</span>)}</div>}
+            </div>
+            <div className="hero-stats">
+              <div className="hero-stat"><strong>{compact(listeners)}</strong><span>Last.fm listeners</span></div>
+              <div className="hero-stat"><strong>{compact(plays)}</strong><span>Total plays</span></div>
+              <div className="hero-stat"><strong>{listeners && plays ? Math.round(plays / listeners) : "—"}</strong><span>Plays per listener</span></div>
+              <div className="hero-stat"><strong>{popularity == null ? "—" : Math.round(popularity * 100)}<small>/100</small></strong><span>Popularity on Qloo</span></div>
+            </div>
+          </section>
+
+          <div className="grid-2 fan-grid">
             <div className="card stack">
-              <h3>What your fans are into</h3>
-              <p className="muted small">Genres and styles Qloo links to your music.</p>
-              <div className="chips">{interests.map((t) => <span className="chip" key={t}>{t}</span>)}</div>
-              {moods.length > 0 && <><p className="muted small">The sound</p><div className="chips">{moods.map((t) => <span className="chip" key={t}>{t}</span>)}</div></>}
+              <div className="between"><h3>How old your fans are</h3>{peak && <span className="pill">Biggest group: {AGE_LABELS[peak]}</span>}</div>
+              <p className="muted small">Compared with the average Qloo user. Bars to the right mean more of your fans are that age.</p>
+              <div className="diverge" role="list">
+                {Object.entries(AGE_LABELS).map(([key, labelText]) => {
+                  const value = age[key];
+                  if (value == null) return null;
+                  const width = `${Math.min(50, Math.abs(value) * 50)}%`;
+                  return (
+                    <div key={key} role="listitem" className={`diverge-row ${key === peak ? "peak" : ""}`}>
+                      <span className="diverge-label">{labelText}</span>
+                      <span className="diverge-track"><span className={`diverge-bar ${value >= 0 ? "up" : "down"}`} style={{ width }} /></span>
+                      <span className="level">{level(value)}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             <div className="card stack">
-              <h3>Age of your fans</h3>
-              <p className="muted small">Taller means more of your fans than average are this age.</p>
-              <div className="age-chart" role="img" aria-label={`Fans peak at ${peak ? AGE_LABELS[peak] : "unknown"}`}>
-                {Object.entries(AGE_LABELS).map(([key, labelText]) => (
-                  <div key={key} className={`age-col ${key === peak ? "peak" : ""}`}>
-                    <span className="col" style={{ height: `${Math.max(6, (((age[key] ?? -1) + 1) / maxAge) * 110)}px` }} />
-                    <span>{labelText}</span>
+              <h3>Women and men</h3>
+              <p className="muted small">Which way your fans lean, compared with the average Qloo user.</p>
+              {female == null ? (
+                <p className="muted">No gender data from Qloo.</p>
+              ) : (
+                <>
+                  <div className="meter" aria-label={genderLean(profile.demographics.gender)}>
+                    <span style={{ left: `${50 - Math.max(-1, Math.min(1, female)) * 45}%` }} />
+                  </div>
+                  <div className="meter-labels"><span>More women</span><span>Even</span><span>More men</span></div>
+                  <strong style={{ color: "var(--ink)" }}>{genderLean(profile.demographics.gender)}</strong>
+                </>
+              )}
+              {audience.length > 0 && (
+                <>
+                  <p className="muted small" style={{ marginTop: 8 }}>Qloo describes your fans as</p>
+                  <div className="chips">{audience.map((t) => <span className="chip gold" key={t}>{t}</span>)}</div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {(sound.length > 0 || themes.length > 0 || influences.length > 0) && (
+            <div className="grid-3">
+              {sound.length > 0 && (
+                <div className="card stack">
+                  <h3>Your sound, in Qloo's words</h3>
+                  <div className="chips">{sound.map((t) => <span className="chip gold" key={t}>{t}</span>)}</div>
+                  {instruments.length > 0 && <p className="muted small">Played on {instruments.join(" · ")}</p>}
+                </div>
+              )}
+              {themes.length > 0 && (
+                <div className="card stack">
+                  <h3>What your songs are about</h3>
+                  <div className="chips">{themes.map((t) => <span className="chip" key={t}>{t}</span>)}</div>
+                </div>
+              )}
+              {influences.length > 0 && (
+                <div className="card stack">
+                  <h3>Influenced by</h3>
+                  <ul className="plain-list">{influences.map((t) => <li key={t}>{t}</li>)}</ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          {similar && similar.length > 0 && (
+            <div className="card stack">
+              <h3>Cue compares you with fans of</h3>
+              <p className="muted small">A match counts when your fans like a show, film, game, podcast or brand more than these artists' fans do. That's what keeps the list from being just "whatever is popular".</p>
+              <div className="similar-row">
+                {similar.map((s) => (
+                  <div className="similar" key={s.id}>
+                    <Poster src={s.image_url} name={s.name} type="urn:entity:artist" />
+                    <span>{s.name}</span>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="card stack">
-              <h3>Who they are</h3>
-              <p>{genderLean(profile.demographics?.gender) || "No gender data"}</p>
-              {audience.length > 0 && <><p className="muted small">Qloo describes your audience as</p><div className="chips">{audience.map((t) => <span className="chip" key={t}>{t}</span>)}</div></>}
-              {(tags.influenced_by || []).length > 0 && <p className="muted small">Influences: {tags.influenced_by.join(", ")}</p>}
-            </div>
-          </div>
+          )}
+
           <form
-            className="card stack"
+            className="card stack brief-card"
             onSubmit={(event) => {
               event.preventDefault();
               onStart(brief.trim());
@@ -320,9 +422,7 @@ function Matches({ run, onPitch, onRetry }) {
           <h2>Your best places to pitch</h2>
           <p className="muted">Ranked by how much more your fans like each one than fans of similar artists do.</p>
         </div>
-        {run.status === "running" && (
-          <div className="card loading"><span className="spinner" /><strong>Asking Qloo about your fans…</strong><span className="muted small">This takes about 30 seconds. Watch every call in the trace.</span></div>
-        )}
+        {run.status === "running" && <RunProgress events={run.events} status={run.status} stages={ARTIST_STAGES} title="Cue is working through Qloo for you" />}
         {run.status === "error" && (
           <div className="card stack"><p className="error">{run.error}</p><div><button className="btn small" onClick={onRetry}>Try again</button></div></div>
         )}
@@ -339,15 +439,19 @@ function Matches({ run, onPitch, onRetry }) {
               if (!items.length) return null;
               return (
                 <section key={section.id} className="stack">
-                  <div className="section-head"><h3>{section.title}</h3><span>{section.hint}</span></div>
-                  {items.map((item) => (
-                    <article key={item.candidate.id} className="card match">
-                      <FitRing value={item.fit.value} />
+                  <div className="marquee"><h3>{section.title}</h3><span>{section.hint}</span></div>
+                  {items.map((item, index) => (
+                    <article key={item.candidate.id} className="card match poster-card reveal" style={{ animationDelay: `${index * 70}ms` }}>
+                      <Poster src={item.fit.inputs?.image_url} name={item.candidate.name} type={item.candidate.type} />
                       <div className="stack" style={{ gap: 4 }}>
-                        <h3>{item.candidate.name} <span className="pill">{typeLabel(item.candidate.type)}</span></h3>
+                        <h3>{item.candidate.name} <span className="pill">{typeLabel(item.candidate.type)}</span>{BASIS_LABELS[item.fit.inputs?.basis] && <span className="pill warn" title="Qloo shows no taste lean toward your music here; only the audience's age and gender line up">{BASIS_LABELS[item.fit.inputs.basis]}</span>}</h3>
                         <p>{item.reason}</p>
+                        <Tags inputs={item.fit.inputs} />
                       </div>
-                      <button className="btn small ghost" onClick={() => onPitch(item)}>Write pitch</button>
+                      <div className="match-side">
+                        <FitRing value={item.fit.value} />
+                        <button className="btn small ghost" onClick={() => onPitch(item)}>Write pitch</button>
+                      </div>
                     </article>
                   ))}
                 </section>
@@ -358,6 +462,20 @@ function Matches({ run, onPitch, onRetry }) {
         )}
       </div>
       <Trace events={run.events} status={run.status} />
+    </div>
+  );
+}
+
+const BASIS_LABELS = { audience_only: "Audience match only", weak: "Weak match" };
+
+function Tags({ inputs }) {
+  const genres = inputs?.genres || [];
+  const themes = inputs?.themes || [];
+  if (!genres.length && !themes.length) return null;
+  return (
+    <div className="tags" aria-label="Qloo tags">
+      {genres.map((t) => <span className="tag" key={`g-${t}`}>{t}</span>)}
+      {themes.map((t) => <span className="tag theme" key={`t-${t}`}>{t}</span>)}
     </div>
   );
 }
@@ -384,14 +502,17 @@ function Pitch({ item, artist, onBack }) {
     <div className="stack">
       <button className="linkish" onClick={onBack} style={{ justifySelf: "start" }}>← Back to matches</button>
       <div className="pitch-layout">
-        <aside className="card why">
+        <aside className="card why" style={inputs.image_url ? { "--poster": `url("${encodeURI(inputs.image_url)}")` } : undefined}>
           <div className="between"><span className="pill">{typeLabel(item.candidate.type)}</span><FitRing value={item.fit.value} size={44} /></div>
+          <Poster src={inputs.image_url} name={item.candidate.name} type={item.candidate.type} size="lg" />
           <h2>{item.candidate.name}</h2>
+          <Tags inputs={inputs} />
           <p className="small">Why it fits</p>
           <ul className="small">
             <li>{item.reason}</li>
             {section && <li>{section.title}: {section.hint.toLowerCase()}</li>}
             {typeof inputs.audience === "number" && <li>Audience age and gender match: {Math.round(inputs.audience * 100)}%</li>}
+            {BASIS_LABELS[inputs.basis] && <li>{BASIS_LABELS[inputs.basis]}: Qloo shows no taste lean toward your music here</li>}
           </ul>
         </aside>
         <div className="card stack">
@@ -417,7 +538,22 @@ export default function ArtistPage() {
   const [pitch, setPitch] = useState(null);
   const run = useRun();
 
+  const [trying, setTrying] = useState("");
+
   useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("try");
+    if (wanted) {
+      writeSaved(null);
+      setTrying(wanted);
+      setStep("trying");
+      post("/onboarding/name", { name: wanted, role: "singer" })
+        .then((f) => {
+          setFound({ ...f, typedName: wanted });
+          setStep("confirm");
+        })
+        .catch(() => setStep("connect"));
+      return;
+    }
     const saved = readSaved();
     if (saved?.signal_ids?.length) {
       setArtist(saved);
@@ -431,7 +567,7 @@ export default function ArtistPage() {
     run.start({ mode: "artist", signal_ids: artist.signal_ids, artist_name: artist.name, basis: artist.basis, route: artist.route, brief: text });
   };
 
-  const stepIndex = { connect: 0, confirm: 1, fans: 2, matches: 2, pitch: 2 }[step];
+  const stepIndex = { trying: 0, connect: 0, confirm: 1, fans: 2, matches: 2, pitch: 2 }[step];
   const nav = useMemo(
     () =>
       artist ? (
@@ -457,6 +593,9 @@ export default function ArtistPage() {
 
   return (
     <Shell right={nav}>
+      {step === "trying" && (
+        <div className="narrow"><div className="card loading"><span className="spinner" /><strong>Looking up {trying} in Qloo…</strong></div></div>
+      )}
       {step === "connect" && (
         <Connect
           onFound={(f) => {

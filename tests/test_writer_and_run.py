@@ -8,7 +8,7 @@ from cue.agents.writer.instructions import schema
 from cue.guards.content import is_explicit, remove_explicit
 from cue.harness.events import RunEvents
 from cue.records import FitScore, Match
-from cue.tools.records import Demographics, EntityRef, InsightsItem, InsightsRequest, InsightsResult
+from cue.tools.records import Demographics, Entity, EntityRef, InsightsItem, InsightsRequest, InsightsResult, TagRef
 
 ARTIST = ArtistFacts("A-REAL", "Fake Artist", "measured", "strongest at ages 25–29")
 
@@ -121,7 +121,17 @@ def fake_tools():
     async def demographics(ids):
         return InsightsResult(InsightsRequest("urn:demographics"), demographics=tuple(Demographics(i, {"25_to_29": 0.5}, {"female": 0.2}) for i in ids))
 
-    return {"similar_artists": similar_artists, "insights_group": insights_group, "insights_section": insights_section, "find_tags": find_tags, "demographics": demographics}
+    async def get_entities(ids):
+        tags = (
+            TagRef("t1", "Teen dramedy", "urn:tag:subgenre:qloo"),
+            TagRef("t2", "Comedy", "urn:tag:genre:qloo"),
+            TagRef("t3", "Coming of age", "urn:tag:theme:qloo"),
+            TagRef("t4", "Sex comedy", "urn:tag:genre:media"),
+            TagRef("t5", "Male wears underwear", "urn:tag:keyword:media"),
+        )
+        return [Entity(show(i), image_url=f"https://img/{i}.jpg", tags=tags) for i in ids]
+
+    return {"similar_artists": similar_artists, "insights_group": insights_group, "insights_section": insights_section, "find_tags": find_tags, "demographics": demographics, "get_entities": get_entities}
 
 
 def test_run_artist_end_to_end_with_fakes():
@@ -135,6 +145,9 @@ def test_run_artist_end_to_end_with_fakes():
     assert all("porn" not in m.candidate.id for m in run.matches)
     gem = next(s for s in run.scores if s.match_id == "A-REAL:gem")
     assert gem.inputs["lift"] == pytest.approx(0.05) and gem.inputs["section"] == "indie_gems" and gem.inputs["audience"] == 1.0
+    picked = run.kit.items[0].fit.inputs
+    assert picked["genres"] == ["Comedy", "Teen dramedy"] and picked["themes"] == ["coming of age"]
+    assert picked["basis"] in ("taste", "audience_only") and picked["image_url"].startswith("https://img/")
     kinds = [e["kind"] for e in events]
     assert kinds[-1] == "result" and "guard_drop" in kinds
     assert all(e["run_id"] == "r_e2e" for e in events)
@@ -148,3 +161,10 @@ def test_writer_failure_returns_no_pitches_instead_of_crashing():
 
     out = asyncio.run(write_pitches(ARTIST, [pick("REAL-1")], llm=broken))
     assert out.items == () and "no pitches written" in out.drops[0].reason
+
+
+def test_prompt_carries_production_genres_and_themes():
+    match, fit = pick("REAL-1")
+    fit = FitScore(fit.match_id, fit.value, fit.status, {**fit.inputs, "genres": ["Comedy"], "themes": ["coming of age"]})
+    user, _, _ = build_prompt(ARTIST, [(match, fit)])
+    assert "Qloo genres: Comedy" in user and "Qloo themes: coming of age" in user

@@ -7,7 +7,7 @@ from cue.agents.common.llm import LLMError, _env, structured
 from cue.agents.writer import instructions
 from cue.agents.writer.guardrail import brief_fallback, check_pitches
 from cue.guards import Drop, Known, guard_brief_items
-from cue.guards.claims import strip_newness_claims
+from cue.guards.claims import strip_newness_claims, strip_sound_claims
 from cue.records import BriefItem, FitScore, Match, PitchItem
 
 TYPE_LABELS = {
@@ -35,6 +35,10 @@ class ArtistFacts:
 
 def _match_line(alias: str, match: Match, fit: FitScore) -> str:
     facts = [f"{TYPE_LABELS.get(match.candidate.type, 'production')}, {SECTION_LABELS.get(fit.inputs.get('section'), '')}"]
+    if fit.inputs.get("genres"):
+        facts.append("Qloo genres: " + ", ".join(fit.inputs["genres"]))
+    if fit.inputs.get("themes"):
+        facts.append("Qloo themes: " + ", ".join(fit.inputs["themes"]))
     lift = fit.inputs.get("lift")
     if lift is not None and lift > 0:
         facts.append("people who watch or play it like this artist's kind of music more than fans of similar artists do")
@@ -106,8 +110,15 @@ async def write_pitches(artist: ArtistFacts, picks: list[tuple[Match, FitScore]]
     return WriterOutcome(tuple(kept), tuple(drops + guard_drops))
 
 
-def _artist_line(alias: str, match: Match, fit: FitScore) -> str:
+def _artist_line(alias: str, match: Match, fit: FitScore, show_aliases: dict[str, str]) -> str:
     facts = ["a lesser-known artist"]
+    if fit.inputs.get("genres"):
+        facts.append("Qloo genres: " + ", ".join(fit.inputs["genres"]))
+    if fit.inputs.get("styles"):
+        facts.append("Qloo style words: " + ", ".join(fit.inputs["styles"]))
+    shows = [f"{{{{{show_aliases[n]}}}}}" for n in fit.inputs.get("fans_also_watch") or [] if n in show_aliases]
+    if shows:
+        facts.append(f"fans of {' and '.join(shows)}, productions similar to this one, also listen to this artist")
     lift = fit.inputs.get("lift")
     if lift is not None and lift > 0:
         facts.append("this production's audience likes this artist more than audiences of similar productions do")
@@ -120,12 +131,17 @@ def _artist_line(alias: str, match: Match, fit: FitScore) -> str:
 def build_brief_prompt(production_id: str, production_name: str, production_type: str, picks: list[tuple[Match, FitScore]], brief: str = "") -> tuple[str, dict[str, str], dict[str, str]]:
     aliases = {"P-1": production_id}
     alias_names = {"P-1": production_name}
+    show_aliases: dict[str, str] = {}
+    for _, fit in picks:
+        for name in fit.inputs.get("fans_also_watch") or []:
+            show_aliases.setdefault(name, f"S-{len(show_aliases) + 1}")
+    alias_names.update({alias: name for name, alias in show_aliases.items()})
     lines = []
     for index, (match, fit) in enumerate(picks, start=1):
         alias = f"A-{index}"
         aliases[alias] = match.candidate.id
         alias_names[alias] = match.candidate.name
-        lines.append(_artist_line(alias, match, fit))
+        lines.append(_artist_line(alias, match, fit, show_aliases))
     user = (
         f"<production>\n{{{{P-1}}}} {production_name} ({TYPE_LABELS.get(production_type, 'production')})\n</production>\n"
         f"<brief>\n{brief or '(none)'}\n</brief>\n"
@@ -180,7 +196,8 @@ async def write_brief(
     real: list[BriefItem] = []
     for item in kept:
         reason, newness = strip_newness_claims(item.reason)
-        guard_drops += newness
+        reason, sound = strip_sound_claims(reason, [*item.fit.inputs.get("genres", ()), *item.fit.inputs.get("styles", ())])
+        guard_drops += newness + sound
         reason = reason or brief_fallback(item.candidate.name, item.fit)
         real.append(replace(item, candidate=replace(item.candidate, id=aliases[item.candidate.id]), reason=reason))
     return BriefOutcome(tuple(real), tuple(drops + guard_drops))

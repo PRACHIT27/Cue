@@ -122,3 +122,40 @@ def test_newness_claims(line, dropped):
 
     text, drops = strip_newness_claims(line)
     assert (text == "") == dropped and bool(drops) == dropped
+
+
+@pytest.mark.parametrize(
+    "line, dropped",
+    [
+        ("Their warm, intimate songs could suit a quiet, bruised late-night kitchen scene.", True),
+        ("Their rough-edged, soulful sound could underscore a messy, funny family confrontation.", True),
+        ("Their airy, intimate sound could suit a tense pause before a big family blowup.", True),
+        ("Her melancholy vocals would carry a closing scene.", True),
+        ("Fake Show's viewers already like their music more than fans of similar shows do.", False),
+        ("Their listeners are a similar age and gender to this audience.", False),
+        ("Their fans share tastes with the people who watch it.", False),
+    ],
+)
+def test_sound_claims(line, dropped):
+    from cue.guards.claims import strip_sound_claims
+
+    text, drops = strip_sound_claims(line)
+    assert (text == "") == dropped and bool(drops) == dropped
+
+
+def test_a_sound_sentence_is_cut_and_the_audience_sentence_kept():
+    from cue.guards.claims import strip_sound_claims
+
+    text, drops = strip_sound_claims("Fans of Fake Show already lean toward this artist. Their warm, soulful tracks could sit under a montage.")
+    assert text == "Fans of Fake Show already lean toward this artist." and len(drops) == 1
+
+
+def test_sound_words_from_qloo_tags_are_allowed():
+    from cue.guards.claims import strip_sound_claims
+
+    kept, drops = strip_sound_claims("Their moody, atmospheric songs suit a late scene.", ["Moody", "Atmospheric", "Gothic Rock"])
+    assert kept and not drops
+    kept, drops = strip_sound_claims("Their moody, warm songs suit a late scene.", ["Moody", "Atmospheric"])
+    assert kept == "" and len(drops) == 1
+    kept, drops = strip_sound_claims("Their indie-folk and Americana music fits.", ["Indie Folk", "Americana"])
+    assert kept and not drops

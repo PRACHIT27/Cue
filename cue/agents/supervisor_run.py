@@ -15,8 +15,8 @@ from cue.scoring.fit import score_matches
 from cue.scoring.lift import audience_similarity, lift_scores
 from cue.identity.musicbrainz import LifeSpan, shared_client
 from cue.tools import get_entities, insights
-from cue.tools.names import artist_key
-from cue.tools.records import Demographics, InsightsItem, InsightsRequest, InsightsResult
+from cue.tools.names import artist_key, normalise_name
+from cue.tools.records import Demographics, Entity, EntityRef, InsightsItem, InsightsRequest, InsightsResult
 
 ARTIST = "urn:entity:artist"
 UNDER_RADAR_CAP = 0.80
@@ -28,12 +28,18 @@ GROUP_SIZE = 4
 GROUP_TAKE = 50
 SHORTLIST = 8
 LIFE_CHECKS = 12
+GENRE_TAGS = ("urn:tag:genre:qloo", "urn:tag:subgenre:qloo")
+STYLE_TAG = "urn:tag:style:qloo"
+MAX_GENRES = 3
+MAX_STYLES = 3
+FILLER_STYLES = {"engaging", "expressive", "dynamic", "innovative", "authentic", "unique", "versatile", "creative", "distinctive", "original"}
+ALSO_LISTEN = 2
 LLMCall = Callable[..., Awaitable[dict[str, Any]]]
 
 
-async def similar_productions(production_type: str, production_id: str) -> list[str]:
+async def similar_productions(production_type: str, production_id: str) -> list[EntityRef]:
     result = await insights(InsightsRequest(production_type, (production_id,), take=GROUP_SIZE + 2))
-    return [i.candidate.id for i in result.items if i.candidate.id != production_id][:GROUP_SIZE]
+    return [i.candidate for i in result.items if i.candidate.id != production_id][:GROUP_SIZE]
 
 
 async def lesser_known_artists(signal_ids: list[str], cap: float) -> InsightsResult:
@@ -63,6 +69,26 @@ async def life_span(mbids: list[str], name: str) -> LifeSpan | None:
         ids = [found] if found else []
     spans = [span for span in [await client.life_span(m) for m in ids] if span is not None]
     return next((s for s in spans if s.ended), spans[0] if spans else None)
+
+
+def _distinct(names: list[str]) -> list[str]:
+    seen: dict[str, str] = {}
+    for name in names:
+        seen.setdefault(normalise_name(name), name)
+    return list(seen.values())
+
+
+def music_tags(entities: list[Entity]) -> tuple[list[str], list[str]]:
+    tags = [t for e in entities for t in e.tags]
+    genres = [t.name for kind in GENRE_TAGS for t in tags if t.type == kind]
+    words = [t.name.strip().lower() for t in tags if t.type == STYLE_TAG]
+    styles = [w for w in words if " " not in w and w not in FILLER_STYLES]
+    return _distinct(genres)[:MAX_GENRES], _distinct(styles)[:MAX_STYLES]
+
+
+def also_listen(explanation: Mapping[str, float], names: Mapping[str, str]) -> list[str]:
+    shares = sorted(((score, names[i]) for i, score in explanation.items() if i in names), reverse=True)
+    return [name for _, name in shares[:ALSO_LISTEN]]
 
 
 def merge_same_artist(items: list[InsightsItem]) -> list[InsightsItem]:
@@ -149,7 +175,9 @@ async def run_supervisor(
         events.emit("guard_drop", guard=drop.guard, reason=drop.reason, text=drop.text)
 
     candidate_result = InsightsResult(InsightsRequest(ARTIST), tuple(items))
-    similar_ids = _ok(results, "similar") or []
+    similar = _ok(results, "similar") or []
+    similar_ids = [s.id for s in similar]
+    similar_names = {s.id: s.name for s in similar}
     follow_up = []
     if items:
         follow_up.append(PlannedCall("audiences", "demographics", {"ids": [i.candidate.id for i in items]}))
@@ -175,6 +203,7 @@ async def run_supervisor(
 
     profiles = {e.ref.id: e for e in (_ok(audience_calls, "profiles") or [])}
     duplicates = {i.candidate.id: i.duplicate_ids for i in items}
+    group_explanations = {i.candidate.id: i.explanation for i in group.items}
 
     def mbids(entity_id: str) -> list[str]:
         ids = (entity_id, *duplicates.get(entity_id, ()))
@@ -191,11 +220,18 @@ async def run_supervisor(
             drops.append(drop)
             events.emit("guard_drop", guard=drop.guard, reason=drop.reason, text=drop.text)
             continue
-        candidates = [profiles.get(i) for i in (match.candidate.id, *duplicates.get(match.candidate.id, ()))]
-        spotify_id = next((c.spotify_id for c in candidates if c is not None and c.spotify_id), None)
+        all_ids = (match.candidate.id, *duplicates.get(match.candidate.id, ()))
+        candidates = [c for c in (profiles.get(i) for i in all_ids) if c is not None]
+        spotify_id = next((c.spotify_id for c in candidates if c.spotify_id), None)
+        genres, styles = music_tags(candidates)
+        explanation = next((group_explanations[i] for i in all_ids if group_explanations.get(i)), {})
         extra = {
             "life_span": "active" if span is not None else "unverified",
             "spotify_url": f"https://open.spotify.com/artist/{spotify_id}" if spotify_id else None,
+            "genres": genres,
+            "styles": styles,
+            "fans_also_watch": also_listen(explanation, similar_names),
+            "image_url": next((c.image_url for c in candidates if c.image_url), None),
         }
         shortlisted.append((match, replace(fit, inputs={**fit.inputs, **extra})))
         if len(shortlisted) == SHORTLIST:

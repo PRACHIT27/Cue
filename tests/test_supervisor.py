@@ -5,9 +5,17 @@ from cue.agents.writer import build_brief_prompt
 from cue.identity.musicbrainz import LifeSpan
 from cue.harness.events import RunEvents
 from cue.records import FitScore, Match
-from cue.tools.records import Demographics, Entity, EntityRef, InsightsItem, InsightsRequest, InsightsResult
+from cue.tools.records import Demographics, Entity, EntityRef, InsightsItem, InsightsRequest, InsightsResult, TagRef
 
 SHOW = "SHOW-1"
+TAGS = (
+    TagRef("g1", "Indie Folk", "urn:tag:genre:qloo"),
+    TagRef("g2", "Indie - Folk", "urn:tag:genre"),
+    TagRef("g3", "Americana", "urn:tag:subgenre:qloo"),
+    TagRef("s0", "Engaging", "urn:tag:style:qloo"),
+    TagRef("s1", "Moody", "urn:tag:style:qloo"),
+    TagRef("s2", "Poetic Folk", "urn:tag:style:qloo"),
+)
 
 
 def artist(i, pop, name=None):
@@ -22,7 +30,7 @@ def fake_tools(artists, wide=None, ended=(), no_mbid=(), ended_by_name=()):
 
     async def similar_productions(production_type, production_id):
         calls.append("similar")
-        return ["SHOW-2", "SHOW-3"]
+        return [EntityRef("SHOW-2", "Other Show", "urn:entity:tv_show", 0.9), EntityRef("SHOW-3", "Third Show", "urn:entity:tv_show", 0.9)]
 
     async def lesser_known_artists(signal_ids, cap):
         calls.append(("artists", cap))
@@ -31,13 +39,13 @@ def fake_tools(artists, wide=None, ended=(), no_mbid=(), ended_by_name=()):
 
     async def artists_group(group_ids, candidates):
         calls.append(("group", tuple(i.candidate.id for i in candidates.items)))
-        return result([InsightsItem(i.candidate, i.affinity - 0.02, 1, {}) for i in candidates.items])
+        return result([InsightsItem(i.candidate, i.affinity - 0.02, 1, {"SHOW-3": 0.3, "SHOW-2": 0.2}) for i in candidates.items])
 
     async def demographics(ids):
         return InsightsResult(InsightsRequest("urn:demographics"), demographics=tuple(Demographics(i, {"25_to_29": 0.3}, {"female": 0.1}) for i in ids))
 
     async def get_entities(ids):
-        return [Entity(EntityRef(i, f"Artist {i}", "urn:entity:artist", 0.5), spotify_id=f"sp{i}", musicbrainz_id=None if i in no_mbid else f"mb{i}") for i in ids]
+        return [Entity(EntityRef(i, f"Artist {i}", "urn:entity:artist", 0.5), spotify_id=f"sp{i}", musicbrainz_id=None if i in no_mbid else f"mb{i}", tags=TAGS) for i in ids]
 
     async def life_span(mbids, name):
         calls.append(("life", tuple(mbids), name))
@@ -154,3 +162,38 @@ def test_name_search_fallback_catches_an_artist_with_no_mbid():
     out, _ = run(tools)
     assert ("life", (), "Fake Legend") in calls
     assert all(i.candidate.id != "nomb" for i in out.brief.artists)
+
+
+def test_writer_guessing_how_an_artist_sounds_is_cut_and_logged():
+    async def llm(**kwargs):
+        allowed = kwargs["schema"]["properties"]["items"]["items"]["properties"]["candidate_id"]["enum"]
+        return {"items": [{"candidate_id": a, "reason": f"Fans of {{{{P-1}}}} lean toward {{{{{a}}}}}. Their warm, soulful songs suit a kitchen scene."} for a in allowed]}
+
+    out = asyncio.run(run_supervisor(SHOW, "Fake Show", "urn:entity:tv_show", RunEvents("r_sup", lambda e: None), llm=llm, tools=fake_tools(many(10))[0]))
+    assert all("soulful" not in i.reason and i.reason.startswith("Fans of Fake Show") for i in out.brief.artists)
+    assert any(d.guard == "claim" and "sounds" in d.reason for d in out.drops)
+
+
+def test_writer_gets_qloo_genres_styles_and_similar_shows_as_placeholders():
+    seen = {}
+
+    async def llm(**kwargs):
+        seen["user"] = kwargs["user"]
+        return await writer_llm()(**kwargs)
+
+    out = asyncio.run(run_supervisor(SHOW, "Fake Show", "urn:entity:tv_show", RunEvents("r_sup", lambda e: None), llm=llm, tools=fake_tools(many(10))[0]))
+    inputs = out.brief.artists[0].fit.inputs
+    assert inputs["genres"] == ["Indie Folk", "Americana"] and inputs["styles"] == ["moody"]
+    assert inputs["fans_also_watch"] == ["Third Show", "Other Show"]
+    assert "Qloo genres: Indie Folk, Americana" in seen["user"] and "fans of {{S-1}} and {{S-2}}" in seen["user"]
+    assert "Third Show" not in seen["user"].split("<artists>")[1]
+
+
+def test_a_description_in_qloo_words_survives_and_one_in_other_words_is_cut():
+    async def llm(**kwargs):
+        allowed = kwargs["schema"]["properties"]["items"]["items"]["properties"]["candidate_id"]["enum"]
+        return {"items": [{"candidate_id": a, "reason": f"{{{{{a}}}}} makes moody, Americana music. Their warm songs suit {{{{P-1}}}}. Fans of {{{{S-1}}}} listen too."} for a in allowed]}
+
+    out = asyncio.run(run_supervisor(SHOW, "Fake Show", "urn:entity:tv_show", RunEvents("r_sup", lambda e: None), llm=llm, tools=fake_tools(many(10))[0]))
+    reason = out.brief.artists[0].reason
+    assert "moody, Americana music" in reason and "warm" not in reason and "Fans of Third Show listen too." in reason

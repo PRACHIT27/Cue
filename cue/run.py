@@ -90,11 +90,15 @@ async def artist_mode(args: argparse.Namespace, events: RunEvents) -> Any:
         print(f"\n{SECTION_TITLES[section]}")
         for item in items:
             kind = item.candidate.type.split(":")[-1].replace("_", " ")
-            print(f"  {item.candidate.name} ({kind})  fit {item.fit.value:.2f}")
+            label = BASIS_LABELS.get(item.fit.inputs.get("basis"), "")
+            print(f"  {item.candidate.name} ({kind})  fit {item.fit.value:.2f}{'  [' + label + ']' if label else ''}")
             print(f"    {item.reason}")
             if args.emails:
                 print(f"    Subject: {item.email_subject}\n    {item.email_body}")
     return run
+
+
+BASIS_LABELS = {"audience_only": "audience match only", "weak": "weak match"}
 
 
 async def supervisor_mode(args: argparse.Namespace, events: RunEvents) -> Any:
