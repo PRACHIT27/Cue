@@ -32,7 +32,9 @@ def parser() -> argparse.ArgumentParser:
 
 def _print_row(row: RowScore) -> None:
     hit = "-" if row.hit is None else ("HIT" if row.hit else "miss")
-    status = row.error or f"{hit:<4} made-up {row.made_up}/{row.made_up + row.resolved}"
+    if row.answer_above_cap:
+        hit = "cap"
+    status = row.error or f"{hit:<4} not in Qloo {row.made_up}/{row.made_up + row.resolved}"
     print(f"  {row.id:<8} {row.system:<4} {row.seconds:>6.1f}s  {status}")
 
 
@@ -65,8 +67,8 @@ async def main(argv: list[str] | None = None) -> int:
     for system, s in document["summary"].items():
         hit = "n/a" if s["hit_rate_top10"] is None else f"{s['hit_rate_top10']:.0%} of {s['hit_rows']}"
         made_up = "n/a" if s["made_up_rate"] is None else f"{s['made_up_rate']:.0%} of {s['names_checked']} names"
-        emerging = "n/a" if s["emerging_share"] is None else f"{s['emerging_share']:.0%}"
-        print(f"  {system:<4} hit@10 {hit} · made-up {made_up} · emerging {emerging} · median {s['median_seconds']}s · ${s['total_usd']} · errors {s['errors']}")
+        radar = "n/a" if s["under_the_radar_share"] is None else f"{s['under_the_radar_share']:.0%}"
+        print(f"  {system:<4} hit@10 {hit} · not in Qloo {made_up} · under-the-radar {radar} · median {s['median_seconds']}s · ${s['total_usd']} · errors {s['errors']} · answers above cap {s['answers_above_cap']}")
     print(f"\nScores saved to {out}. Suggested names (private, not for the repo) in {DETAILS_DIR}/{run_id}.json")
     return 0
 

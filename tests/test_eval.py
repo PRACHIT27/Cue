@@ -21,12 +21,12 @@ def test_hit_only_counts_the_top_ten():
     assert is_hit(None, names) is None
 
 
-def test_score_row_counts_made_up_and_emerging():
+def test_score_row_counts_made_up_and_under_the_radar():
     resolved = [Resolved("A", True, 0.4), Resolved("B", True, 0.95), Resolved("C", False, None)]
     row = score_row("p1", "llm", "supervisor", "A", ["A", "B", "C"], resolved, 0.8, 1.234, 0.01)
-    assert (row.hit, row.suggested, row.made_up, row.resolved, row.emerging) == (True, 3, 1, 2, 1)
+    assert (row.hit, row.suggested, row.made_up, row.resolved, row.under_radar) == (True, 3, 1, 2, 1)
     artist_row = score_row("p2", "cue", "artist", "X", ["A"], [Resolved("A", True, 0.99)], 0.8, 1, 0)
-    assert artist_row.emerging == 0
+    assert artist_row.under_radar == 0
 
 
 def test_summary_rates():
@@ -38,7 +38,7 @@ def test_summary_rates():
     assert s["hit_rate_top10"] == 0.5
     assert s["made_up_rate"] == round(1 / 3, 4)
     assert s["median_seconds"] == 3
-    assert s["emerging_share"] is None
+    assert s["under_the_radar_share"] is None
 
 
 def test_load_records_filters_split_and_rejects_duplicates(tmp_path):
@@ -90,7 +90,26 @@ def test_the_shipped_eval_set_is_well_formed():
     assert all(r.type in ("tv_show", "movie", "videogame", "podcast", "brand") for r in records if r.mode == "supervisor")
 
 
-def test_supervisor_hit_counts_with_an_emerging_answer():
+def test_supervisor_hit_counts_with_an_under_the_radar_answer():
     resolved = [Resolved("Baby Queen", True, 0.42), Resolved("Famous Star", True, 0.97)]
-    row = score_row("s03", "cue", "supervisor", "Baby Queen", ["Famous Star", "Baby Queen"], resolved, 0.8, 1, 0)
-    assert (row.hit, row.emerging, row.made_up) == (True, 1, 0)
+    row = score_row("s03", "cue", "supervisor", "Baby Queen", ["Famous Star", "Baby Queen"], resolved, 0.8, 1, 0, 0.42)
+    assert (row.hit, row.under_radar, row.made_up) == (True, 1, 0)
+
+
+def test_supervisor_answer_above_the_cap_is_not_scored_for_hits():
+    resolved = [Resolved("Famous Star", True, 0.97)]
+    row = score_row("s07", "llm", "supervisor", "Famous Star", ["Famous Star"], resolved, 0.8, 1, 0, 0.97)
+    assert row.hit is None and row.answer_above_cap is True
+    summary = summarise([row])["llm"]
+    assert summary["hit_rate_top10"] is None and summary["answers_above_cap"] == 1
+
+
+def test_names_match_without_a_trailing_year_or_label():
+    assert is_hit("Twilight", ["Twilight (2008)"]) is True
+    assert is_hit("The O.C.", ["The O.C. (TV series)"]) is True
+
+
+def test_results_explain_the_metrics_and_caveats():
+    doc = results_document([], "all", 0.8, "v")
+    assert "answers_above_cap" in doc["definitions"]
+    assert any("recall" in c for c in doc["caveats"])

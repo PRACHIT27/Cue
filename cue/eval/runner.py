@@ -37,6 +37,9 @@ async def evaluate(
     rows: list[RowScore] = []
     details: dict[str, dict[str, list[str]]] = {}
     for record in records:
+        answer_popularity = None
+        if record.mode == "supervisor" and record.answer:
+            answer_popularity = (await resolve(record.answer, record.mode)).popularity
         for name, system in systems.items():
             started, before = time.perf_counter(), spent()
             try:
@@ -47,7 +50,7 @@ async def evaluate(
             else:
                 elapsed, usd = time.perf_counter() - started, spent() - before
                 resolved = [await resolve(s, record.mode) for s in suggestions]
-                row = score_row(record.id, name, record.mode, record.answer, suggestions, resolved, cap, elapsed, usd)
+                row = score_row(record.id, name, record.mode, record.answer, suggestions, resolved, cap, elapsed, usd, answer_popularity)
                 details.setdefault(record.id, {})[name] = suggestions
             rows.append(row)
             on_row(row)
@@ -61,6 +64,17 @@ def results_document(rows: list[RowScore], split: str, cap: float, prompt_versio
         "systems": {"llm": "Claude alone, no tools", "cue": "Cue: Qloo data, code scoring, grounding guard"},
         "popularity_cap": cap,
         "prompt_version": prompt_version,
+        "definitions": {
+            "hit_rate_top10": "Share of rows where the known answer is in the system's top 10, by name.",
+            "made_up_rate": "Share of suggested names Qloo has no exact match for. Not found in Qloo, which is not always invented.",
+            "under_the_radar_share": "Supervisor rows: share of found artists at or under the popularity cap.",
+            "answers_above_cap": "Supervisor rows whose known answer is above the popularity cap. Cue leaves such artists out by design, so these rows are not scored for hits, for any system.",
+        },
+        "caveats": [
+            "Known placements are famous, so Claude alone may recall them from training rather than reason about taste.",
+            "Qloo's taste data can reflect a placement after it happened, which may help Cue on old placements.",
+            "Two systems only: Claude alone and Cue. Claude with web search was not run.",
+        ],
         "summary": summarise(rows),
         "rows": [row_dict(r) for r in rows],
     }

@@ -10,7 +10,8 @@ TOP_K = 10
 
 
 def normalise(name: str) -> str:
-    text = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().casefold()
+    text = re.sub(r"\s*\([^)]*\)\s*$", "", name)
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().casefold()
     text = text.replace("&", " and ")
     text = re.sub(r"[^a-z0-9 ]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
@@ -40,10 +41,11 @@ class RowScore:
     suggested: int
     made_up: int
     resolved: int
-    emerging: int
+    under_radar: int
     seconds: float
     usd: float
     error: str | None = None
+    answer_above_cap: bool = False
 
 
 def score_row(
@@ -56,21 +58,24 @@ def score_row(
     cap: float,
     seconds: float,
     usd: float,
+    answer_popularity: float | None = None,
 ) -> RowScore:
     top = list(suggestions[:TOP_K])
     found = [r for r in resolved if r.found]
-    emerging = sum(1 for r in found if r.popularity is not None and r.popularity <= cap) if mode == "supervisor" else 0
+    under_radar = sum(1 for r in found if r.popularity is not None and r.popularity <= cap) if mode == "supervisor" else 0
+    above_cap = mode == "supervisor" and answer_popularity is not None and answer_popularity > cap
     return RowScore(
         id=record_id,
         system=system,
         mode=mode,
-        hit=is_hit(answer, top),
+        hit=None if above_cap else is_hit(answer, top),
         suggested=len(top),
         made_up=len(resolved) - len(found),
         resolved=len(found),
-        emerging=emerging,
+        under_radar=under_radar,
         seconds=round(seconds, 2),
         usd=round(usd, 6),
+        answer_above_cap=above_cap,
     )
 
 
@@ -99,7 +104,8 @@ def summarise(rows: Iterable[RowScore]) -> dict[str, Any]:
             "hit_rows": len(judged),
             "made_up_rate": _rate(sum(r.made_up for r in ok), sum(r.made_up + r.resolved for r in ok)),
             "names_checked": sum(r.made_up + r.resolved for r in ok),
-            "emerging_share": _rate(sum(r.emerging for r in supervisor), sum(r.resolved for r in supervisor)),
+            "under_the_radar_share": _rate(sum(r.under_radar for r in supervisor), sum(r.resolved for r in supervisor)),
+            "answers_above_cap": sum(1 for r in ok if r.answer_above_cap),
             "median_seconds": round(statistics.median(times), 2) if times else None,
             "slowest_seconds": round(max(times), 2) if times else None,
             "total_usd": round(sum(r.usd for r in items), 4),
