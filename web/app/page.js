@@ -60,6 +60,7 @@ export default function Welcome() {
         <span>1 · Connect</span>
         <span>2 · See the match</span>
         <span>3 · Pitch</span>
+        <Link href="/eval" className="linkish">How Cue compares →</Link>
       </div>
     </Shell>
   );

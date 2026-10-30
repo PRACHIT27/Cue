@@ -1,0 +1,55 @@
+{
+ "generated": "2026-10-30 19:22",
+ "split": "all",
+ "systems": {
+  "llm": "Claude alone, no tools",
+  "cue": "Cue: Qloo data, code scoring, grounding guard"
+ },
+ "popularity_cap": 0.8,
+ "prompt_version": "eval-llm-alone-v2",
+ "definitions": {
+  "hit_rate_top10": "Share of rows where the known answer is in the system's top 10, by name.",
+  "made_up_rate": "Share of suggested names Qloo has no exact match for. Not found in Qloo, which is not always invented.",
+  "under_the_radar_share": "Supervisor rows: share of found artists at or under the popularity cap.",
+  "answers_above_cap": "Supervisor rows whose known answer is above the popularity cap. Cue leaves such artists out by design, so these rows are not scored for hits, for any system.",
+  "repeat_share": "Share of suggestions that the same system also gave to at least two other inputs. High means generic answers.",
+  "median_suggestion_popularity": "How popular the suggested productions or artists are in Qloo (0 to 1). Lower means smaller, more reachable placements."
+ },
+ "caveats": [
+  "Known placements are famous, so Claude alone may recall them from training rather than reason about taste.",
+  "Qloo's taste data can reflect a placement after it happened, which may help Cue on old placements.",
+  "Two systems only: Claude alone and Cue. Claude with web search was not run."
+ ],
+ "summary": {
+  "llm": {
+   "rows": 12,
+   "errors": 0,
+   "hit_rate_top10": null,
+   "hit_rows": 0,
+   "made_up_rate": 0.0,
+   "names_checked": 120,
+   "under_the_radar_share": null,
+   "answers_above_cap": 0,
+   "median_suggestion_popularity": 0.963,
+   "median_seconds": 3.19,
+   "slowest_seconds": 9.92,
+   "total_usd": 0.0755,
+   "repeat_share": 0.6583
+  },
+  "cue": {
+   "rows": 12,
+   "errors": 0,
+   "hit_rate_top10": null,
+   "hit_rows": 0,
+   "made_up_rate": 0.0,
+   "names_checked": 108,
+   "under_the_radar_share": null,
+   "answers_above_cap": 0,
+   "median_suggestion_popularity": 0.8293,
+   "median_seconds": 25.84,
+   "slowest_seconds": 33.77,
+   "total_usd": 0.0323,
+   "repeat_share": 0.3704
+  }
+ }
+}

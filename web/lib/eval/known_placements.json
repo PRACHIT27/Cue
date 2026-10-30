@@ -1,0 +1,49 @@
+{
+ "generated": "2026-10-30 19:00",
+ "split": "all",
+ "systems": {
+  "llm": "Claude alone, no tools",
+  "cue": "Cue: Qloo data, code scoring, grounding guard"
+ },
+ "popularity_cap": 0.8,
+ "prompt_version": "eval-llm-alone-v2",
+ "definitions": {
+  "hit_rate_top10": "Share of rows where the known answer is in the system's top 10, by name.",
+  "made_up_rate": "Share of suggested names Qloo has no exact match for. Not found in Qloo, which is not always invented.",
+  "under_the_radar_share": "Supervisor rows: share of found artists at or under the popularity cap.",
+  "answers_above_cap": "Supervisor rows whose known answer is above the popularity cap. Cue leaves such artists out by design, so these rows are not scored for hits, for any system."
+ },
+ "caveats": [
+  "Known placements are famous, so Claude alone may recall them from training rather than reason about taste.",
+  "Qloo's taste data can reflect a placement after it happened, which may help Cue on old placements.",
+  "Two systems only: Claude alone and Cue. Claude with web search was not run."
+ ],
+ "summary": {
+  "llm": {
+   "rows": 41,
+   "errors": 0,
+   "hit_rate_top10": 0.963,
+   "hit_rows": 27,
+   "made_up_rate": 0.0244,
+   "names_checked": 410,
+   "under_the_radar_share": 0.0448,
+   "answers_above_cap": 9,
+   "median_seconds": 3.58,
+   "slowest_seconds": 9.49,
+   "total_usd": 0.2672
+  },
+  "cue": {
+   "rows": 41,
+   "errors": 0,
+   "hit_rate_top10": 0.037,
+   "hit_rows": 27,
+   "made_up_rate": 0.0105,
+   "names_checked": 382,
+   "under_the_radar_share": 0.9821,
+   "answers_above_cap": 9,
+   "median_seconds": 30.04,
+   "slowest_seconds": 44.49,
+   "total_usd": 0.1094
+  }
+ }
+}

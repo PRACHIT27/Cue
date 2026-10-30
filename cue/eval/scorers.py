@@ -46,6 +46,7 @@ class RowScore:
     usd: float
     error: str | None = None
     answer_above_cap: bool = False
+    mean_popularity: float | None = None
 
 
 def score_row(
@@ -76,6 +77,7 @@ def score_row(
         seconds=round(seconds, 2),
         usd=round(usd, 6),
         answer_above_cap=above_cap,
+        mean_popularity=round(statistics.mean(r.popularity for r in found if r.popularity is not None), 4) if any(r.popularity is not None for r in found) else None,
     )
 
 
@@ -106,6 +108,7 @@ def summarise(rows: Iterable[RowScore]) -> dict[str, Any]:
             "names_checked": sum(r.made_up + r.resolved for r in ok),
             "under_the_radar_share": _rate(sum(r.under_radar for r in supervisor), sum(r.resolved for r in supervisor)),
             "answers_above_cap": sum(1 for r in ok if r.answer_above_cap),
+            "median_suggestion_popularity": round(statistics.median(p), 4) if (p := [r.mean_popularity for r in ok if r.mean_popularity is not None]) else None,
             "median_seconds": round(statistics.median(times), 2) if times else None,
             "slowest_seconds": round(max(times), 2) if times else None,
             "total_usd": round(sum(r.usd for r in items), 4),
@@ -115,3 +118,16 @@ def summarise(rows: Iterable[RowScore]) -> dict[str, Any]:
 
 def row_dict(row: RowScore) -> dict[str, Any]:
     return asdict(row)
+
+
+def repeat_share(suggestions_by_row: Iterable[Sequence[str]], min_rows: int = 3) -> float | None:
+    lists = [list(dict.fromkeys(normalise(n) for n in names)) for names in suggestions_by_row]
+    total = sum(len(names) for names in lists)
+    if not total:
+        return None
+    counts: dict[str, int] = {}
+    for names in lists:
+        for name in names:
+            counts[name] = counts.get(name, 0) + 1
+    repeated = sum(1 for names in lists for name in names if counts[name] >= min_rows)
+    return round(repeated / total, 4)

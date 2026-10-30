@@ -57,7 +57,7 @@ async def main(argv: list[str] | None = None) -> int:
     async with QlooClient(QlooSettings.from_env({**_load_dotenv(), **os.environ})) as client:
         with use_client(client, run_id=run_id):
             rows, details = await evaluate(records, {s: SYSTEMS[s] for s in chosen}, qloo_resolve, budget.spent, CAP, _print_row)
-    document = results_document(rows, args.split, CAP, EVAL_PROMPT_VERSION)
+    document = results_document(rows, args.split, CAP, EVAL_PROMPT_VERSION, details)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(document, indent=1), encoding="utf-8")
@@ -68,7 +68,7 @@ async def main(argv: list[str] | None = None) -> int:
         hit = "n/a" if s["hit_rate_top10"] is None else f"{s['hit_rate_top10']:.0%} of {s['hit_rows']}"
         made_up = "n/a" if s["made_up_rate"] is None else f"{s['made_up_rate']:.0%} of {s['names_checked']} names"
         radar = "n/a" if s["under_the_radar_share"] is None else f"{s['under_the_radar_share']:.0%}"
-        print(f"  {system:<4} hit@10 {hit} · not in Qloo {made_up} · under-the-radar {radar} · median {s['median_seconds']}s · ${s['total_usd']} · errors {s['errors']} · answers above cap {s['answers_above_cap']}")
+        print(f"  {system:<4} hit@10 {hit} · not in Qloo {made_up} · under-the-radar {radar} · median {s['median_seconds']}s · ${s['total_usd']} · errors {s['errors']} · answers above cap {s['answers_above_cap']} · repeats {s['repeat_share']} · suggestion popularity {s['median_suggestion_popularity']}")
     print(f"\nScores saved to {out}. Suggested names (private, not for the repo) in {DETAILS_DIR}/{run_id}.json")
     return 0
 

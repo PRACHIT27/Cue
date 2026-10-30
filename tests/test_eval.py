@@ -113,3 +113,18 @@ def test_results_explain_the_metrics_and_caveats():
     doc = results_document([], "all", 0.8, "v")
     assert "answers_above_cap" in doc["definitions"]
     assert any("recall" in c for c in doc["caveats"])
+
+
+def test_repeat_share_flags_generic_answers():
+    from cue.eval.scorers import repeat_share
+
+    lists = [["Euphoria", "A"], ["Euphoria", "B"], ["Euphoria", "C"], ["D"]]
+    assert repeat_share(lists) == round(3 / 7, 4)
+    assert repeat_share([]) is None
+
+
+def test_suggestion_popularity_is_reported():
+    resolved = [Resolved("A", True, 0.4), Resolved("B", True, 0.8), Resolved("C", False, None)]
+    row = score_row("u1", "cue", "artist", None, ["A", "B", "C"], resolved, 0.8, 1, 0)
+    assert row.mean_popularity == 0.6
+    assert summarise([row])["cue"]["median_suggestion_popularity"] == 0.6

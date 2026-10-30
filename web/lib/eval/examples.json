@@ -1,0 +1,59 @@
+[
+ {
+  "artist": "Major Murphy",
+  "llm": [
+   "Shrinking",
+   "High Fidelity",
+   "Licorice Pizza",
+   "Life Is Strange",
+   "Somebody Somewhere",
+   "Dave"
+  ],
+  "cue": [
+   "Aftersun",
+   "Past Lives",
+   "Sandra",
+   "Joe Pera Talks with You",
+   "PEN15",
+   "Saint Frances"
+  ]
+ },
+ {
+  "artist": "Babehoven",
+  "llm": [
+   "Normal People",
+   "Station Eleven",
+   "Life Is Strange",
+   "Never Have I Ever",
+   "Aftersun",
+   "The Bear"
+  ],
+  "cue": [
+   "Return to Seoul",
+   "Tár",
+   "Undertale",
+   "A Love Song",
+   "Ali & Ava",
+   "TOEM"
+  ]
+ },
+ {
+  "artist": "Wild Pink",
+  "llm": [
+   "Friday Night Lights",
+   "The Bear",
+   "Life Is Strange",
+   "Firewatch",
+   "Patagonia",
+   "Normal People"
+  ],
+  "cue": [
+   "Sandra",
+   "Untitled Goose Game",
+   "Homecoming",
+   "Rough Trade",
+   "DTR - The Official Tinder Podcast",
+   "TOEM"
+  ]
+ }
+]

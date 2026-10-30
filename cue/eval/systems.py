@@ -114,6 +114,9 @@ async def cue_system(record: EvalRecord) -> list[str]:
             raise InputNotFound(f"artist {record.input!r} not in Qloo")
         best = max(found, key=lambda ref: ref.popularity)
         run = await run_artist([best.id], record.input, events)
+        shown = [item.candidate.name for item in run.kit.items]
+        if shown:
+            return _unique(shown)[:TOP_K]
         score_of = {s.match_id: s.value for s in run.scores if s.status == "ok" and s.value is not None}
         ranked = sorted(
             ((score_of[m.match_id], m.candidate.name) for m in run.matches if m.match_id in score_of),
