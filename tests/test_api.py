@@ -10,7 +10,7 @@ from cue.api.app import create_app
 from cue.api.onboarding import search_types, spotify_id_from
 from cue.api.runs import RunManager
 from cue.qloo import InMemoryCache, QlooSettings, TokenBucket
-from cue.records import Brief, BriefItem, FitScore, PitchItem, PitchKit
+from cue.records import Brief, BriefItem, FitScore, Match, PitchItem, PitchKit
 from cue.tools.records import EntityRef
 
 SPOTIFY = "0tC995Rfn9k2l7nqgCZsV7"
@@ -171,7 +171,10 @@ def fake_artist_run(captured):
         fit = FitScore("A-1:S-1", 0.91, "ok", {"section": "prime_time", "lift": 1.4})
         item = PitchItem(ref, fit, "Fans over-index on it.", "Subject", "Body")
         events.emit("result", pitches=1)
-        return SimpleNamespace(kit=PitchKit(events.run_id, "A-1", (item,)), matches=(object(), object()), drops=(), decisions=())
+        other = EntityRef("G-1", "Example Game", "urn:entity:videogame", 0.6)
+        matches = (Match("A-1", ref, 0.9), Match("A-1", other, 0.8))
+        scores = (fit, FitScore("A-1:G-1", 0.7, "ok", {"section": "indie_gems", "lift": 0.03, "audience": 0.9}))
+        return SimpleNamespace(kit=PitchKit(events.run_id, "A-1", (item,)), matches=matches, scores=scores, drops=(), decisions=())
 
     return run
 
@@ -190,6 +193,10 @@ def test_artist_run_streams_events_and_returns_sections():
         assert done["status"] == "done"
         assert done["result"]["sections"]["prime_time"][0]["candidate"]["name"] == "Example Show"
         assert done["result"]["matches_scored"] == 2
+        extra = done["result"]["also_love"]
+        assert list(extra) == ["urn:entity:videogame"]
+        assert extra["urn:entity:videogame"][0]["name"] == "Example Game"
+        assert extra["urn:entity:videogame"][0]["lift"] == 0.03
         stream = client.get(f"/runs/{run_id}/events").text
     kinds = [json.loads(line[6:])["kind"] for line in stream.splitlines() if line.startswith("data: ")]
     assert kinds == ["onboarding", "step_start", "result", "run_end"]
@@ -255,3 +262,15 @@ def test_similar_artists_are_the_comparison_group_with_images():
     assert "Example Artist" not in names and len(names) == 4
     assert names == ["Similar 1", "Similar 2", "Similar 3", "Similar 4"]
     assert body["artists"][0]["image_url"] == "https://images.example/s1.jpg"
+
+
+def test_venues_need_a_city_and_ask_qloo_for_live_music_places():
+    venue = {"entity_id": "V-1", "name": "Example Hall", "popularity": 0.5, "types": ["urn:entity:place"], "query": {"affinity": 0.9}, "properties": {"address": "1 Main St"}}
+    m, fake = manager({("/v2/insights", "filter.type", "urn:entity:place"): {"results": {"entities": [venue]}}})
+    client = TestClient(create_app(m, FakeMusicBrainz()))
+    assert client.get("/artists/A-1/venues").status_code == 422
+    body = client.get("/artists/A-1/venues", params={"city": "Detroit"}).json()
+    assert body["venues"][0] == {"id": "V-1", "name": "Example Hall", "address": "1 Main St", "affinity": 0.9, "popularity": 0.5}
+    sent = next(r for r in fake.requests if r.url.path == "/v2/insights")
+    assert sent.url.params["filter.location.query"] == "Detroit"
+    assert sent.url.params["filter.tags"] == "urn:tag:genre:place:live_music_venue"

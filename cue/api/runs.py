@@ -48,11 +48,38 @@ class RunState:
         }
 
 
+ALSO_PER_TYPE = 4
+
+
+def also_love(run: Any, per_type: int = ALSO_PER_TYPE) -> dict[str, list[dict[str, Any]]]:
+    pitched = {item.candidate.id for item in run.kit.items}
+    scores = {s.match_id: s for s in run.scores if s.status == "ok" and s.value is not None}
+    by_type: dict[str, list[dict[str, Any]]] = {}
+    for match in run.matches:
+        fit = scores.get(match.match_id)
+        if fit is None or match.candidate.id in pitched:
+            continue
+        by_type.setdefault(match.candidate.type, []).append(
+            {
+                "id": match.candidate.id,
+                "name": match.candidate.name,
+                "type": match.candidate.type,
+                "popularity": match.candidate.popularity,
+                "fit": fit.value,
+                "lift": fit.inputs.get("lift"),
+                "audience": fit.inputs.get("audience"),
+                "section": fit.inputs.get("section"),
+            }
+        )
+    return {kind: sorted(rows, key=lambda r: -r["fit"])[:per_type] for kind, rows in by_type.items()}
+
+
 def artist_result(run: Any) -> dict[str, Any]:
     items = [jsonable(item) for item in run.kit.items]
     return {
         "pitches": items,
         "sections": {s: [i for i in items if i["fit"]["inputs"].get("section") == s] for s in SECTIONS},
+        "also_love": also_love(run),
         "matches_scored": len(run.matches),
         "dropped": [jsonable(d) for d in run.drops],
         "decisions": [jsonable(d) for d in run.decisions],

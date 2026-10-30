@@ -19,10 +19,13 @@ from cue.qloo.cache import InMemoryCache
 from cue.qloo.ratelimit import TokenBucket
 from cue.qloo.settings import QlooSettings
 from cue.qloo.smoke import _load_dotenv
+from cue.qloo.params import INSIGHTS
 from cue.tools import find_entity, get_entities, insights, use_client
+from cue.tools.context import qloo_get
 from cue.tools.records import InsightsRequest
 
 PRODUCTION_TYPES = ("tv_show", "movie", "videogame", "podcast", "brand")
+LIVE_MUSIC_VENUE = "urn:tag:genre:place:live_music_venue"
 Role = Literal["singer", "band", "producer", "composer", "lyricist"]
 
 
@@ -141,6 +144,36 @@ def create_app(manager: RunManager | None = None, musicbrainz: Any = None) -> Fa
         by_id = {r.ref.id: r for r in records}
         found = [by_id[i] for i in ids if i in by_id]
         return {"artists": [{"id": r.ref.id, "name": r.ref.name, "image_url": r.image_url, "popularity": r.ref.popularity} for r in found]}
+
+    @app.get("/artists/{entity_id}/venues")
+    async def artist_venues(entity_id: str, city: str = "", take: int = 6) -> dict[str, Any]:
+        city = city.strip()
+        if not city:
+            raise HTTPException(422, "Add a city, such as Detroit or Mumbai")
+        params = {
+            "filter.type": "urn:entity:place",
+            "signal.interests.entities": entity_id,
+            "filter.location.query": city,
+            "filter.tags": LIVE_MUSIC_VENUE,
+            "take": max(1, min(take, 12)),
+        }
+        try:
+            data = await with_qloo(lambda: qloo_get(INSIGHTS, params))
+        except Exception as failure:
+            raise HTTPException(502, f"Qloo couldn't find venues for {city!r}: {failure}")
+        venues = []
+        for raw in ((data or {}).get("results") or {}).get("entities") or []:
+            properties = raw.get("properties") or {}
+            venues.append(
+                {
+                    "id": raw.get("entity_id"),
+                    "name": raw.get("name"),
+                    "address": properties.get("address"),
+                    "affinity": (raw.get("query") or {}).get("affinity"),
+                    "popularity": raw.get("popularity"),
+                }
+            )
+        return {"city": city, "venues": venues}
 
     @app.post("/productions/search")
     async def production_search(body: ProductionLookup) -> dict[str, Any]:
