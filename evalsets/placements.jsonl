@@ -16,9 +16,26 @@
 {"id": "p16", "split": "dev", "mode": "artist", "input": "Marcus Mumford", "answer": "Ted Lasso", "answer_type": "tv_show", "source": "https://www.hollywoodreporter.com/tv/tv-news/ted-lasso-theme-song-1234964874/"}
 {"id": "p17", "split": "dev", "mode": "artist", "input": "Sufjan Stevens", "answer": "Call Me by Your Name", "answer_type": "movie", "source": "https://www.pastemagazine.com/article/sufjan-stevens-mystery-of-love-nominated-for-best"}
 {"id": "p18", "split": "dev", "mode": "artist", "input": "Metallica", "answer": "Stranger Things", "answer_type": "tv_show", "source": "https://www.nbcnews.com/pop-culture/music/metallica-blown-away-master-puppets-scene-stranger-things-rcna36847"}
+{"id": "p19", "split": "test", "mode": "artist", "input": "The Handsome Family", "answer": "True Detective", "answer_type": "tv_show", "source": "https://en.wikipedia.org/wiki/The_Handsome_Family"}
+{"id": "p20", "split": "test", "mode": "artist", "input": "DeVotchKa", "answer": "Little Miss Sunshine", "answer_type": "movie", "source": "https://en.wikipedia.org/wiki/Little_Miss_Sunshine_(soundtrack)"}
+{"id": "p21", "split": "test", "mode": "artist", "input": "Kimya Dawson", "answer": "Juno", "answer_type": "movie", "source": "https://en.wikipedia.org/wiki/Juno_(soundtrack)"}
+{"id": "p22", "split": "test", "mode": "artist", "input": "Baby Queen", "answer": "Heartstopper", "answer_type": "tv_show", "source": "https://en.wikipedia.org/wiki/Colours_of_You"}
+{"id": "p23", "split": "test", "mode": "artist", "input": "Ezra Furman", "answer": "Sex Education", "answer_type": "tv_show", "source": "https://northerntransmissions.com/ezra-furman-scores-sex-education"}
+{"id": "p24", "split": "test", "mode": "artist", "input": "Lena Raine", "answer": "Celeste", "answer_type": "videogame", "source": "https://en.wikipedia.org/wiki/Lena_Raine"}
+{"id": "p25", "split": "test", "mode": "artist", "input": "Vitamin String Quartet", "answer": "Bridgerton", "answer_type": "tv_show", "source": "https://nylon.com/entertainment/vitamin-string-quartet-classical-covers-on-bridgerton-interview"}
+{"id": "p26", "split": "test", "mode": "artist", "input": "The Pierces", "answer": "Pretty Little Liars", "answer_type": "tv_show", "source": "https://en.wikipedia.org/wiki/The_Pierces"}
+{"id": "p27", "split": "test", "mode": "artist", "input": "The Shins", "answer": "Garden State", "answer_type": "movie", "source": "https://en.wikipedia.org/wiki/New_Slang"}
 {"id": "s01", "split": "dev", "mode": "supervisor", "input": "Stranger Things", "answer": null, "type": "tv_show", "source": "no known answer; scores made-up names and emerging share only"}
 {"id": "s02", "split": "dev", "mode": "supervisor", "input": "Euphoria", "answer": null, "type": "tv_show", "source": "no known answer; scores made-up names and emerging share only"}
-{"id": "s03", "split": "dev", "mode": "supervisor", "input": "Heartstopper", "answer": null, "type": "tv_show", "source": "no known answer; scores made-up names and emerging share only"}
+{"id": "s03", "split": "test", "mode": "supervisor", "input": "Heartstopper", "type": "tv_show", "answer": "Baby Queen", "source": "https://en.wikipedia.org/wiki/Colours_of_You"}
 {"id": "s04", "split": "dev", "mode": "supervisor", "input": "The Bear", "answer": null, "type": "tv_show", "source": "no known answer; scores made-up names and emerging share only"}
 {"id": "s05", "split": "dev", "mode": "supervisor", "input": "Life Is Strange", "answer": null, "type": "videogame", "source": "no known answer; scores made-up names and emerging share only"}
 {"id": "s06", "split": "dev", "mode": "supervisor", "input": "Saltburn", "answer": null, "type": "movie", "source": "no known answer; scores made-up names and emerging share only"}
+{"id": "s07", "split": "test", "mode": "supervisor", "input": "True Detective", "type": "tv_show", "answer": "The Handsome Family", "source": "https://en.wikipedia.org/wiki/The_Handsome_Family"}
+{"id": "s08", "split": "test", "mode": "supervisor", "input": "Little Miss Sunshine", "type": "movie", "answer": "DeVotchKa", "source": "https://en.wikipedia.org/wiki/Little_Miss_Sunshine_(soundtrack)"}
+{"id": "s09", "split": "test", "mode": "supervisor", "input": "Juno", "type": "movie", "answer": "Kimya Dawson", "source": "https://en.wikipedia.org/wiki/Juno_(soundtrack)"}
+{"id": "s10", "split": "test", "mode": "supervisor", "input": "Sex Education", "type": "tv_show", "answer": "Ezra Furman", "source": "https://northerntransmissions.com/ezra-furman-scores-sex-education"}
+{"id": "s11", "split": "test", "mode": "supervisor", "input": "Celeste", "type": "videogame", "answer": "Lena Raine", "source": "https://en.wikipedia.org/wiki/Lena_Raine"}
+{"id": "s12", "split": "test", "mode": "supervisor", "input": "Bridgerton", "type": "tv_show", "answer": "Vitamin String Quartet", "source": "https://nylon.com/entertainment/vitamin-string-quartet-classical-covers-on-bridgerton-interview"}
+{"id": "s13", "split": "test", "mode": "supervisor", "input": "Pretty Little Liars", "type": "tv_show", "answer": "The Pierces", "source": "https://en.wikipedia.org/wiki/The_Pierces"}
+{"id": "s14", "split": "test", "mode": "supervisor", "input": "Garden State", "type": "movie", "answer": "The Shins", "source": "https://en.wikipedia.org/wiki/New_Slang"}

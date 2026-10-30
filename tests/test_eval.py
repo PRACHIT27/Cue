@@ -76,3 +76,21 @@ def test_evaluate_scores_each_system_and_survives_a_failure():
     doc = results_document(rows, "dev", 0.8, "v")
     assert doc["summary"]["cue"]["errors"] == 1
     assert "Invented Show" not in json.dumps(doc)
+
+
+def test_the_shipped_eval_set_is_well_formed():
+    from pathlib import Path
+
+    records = load_records(Path("evalsets/placements.jsonl"))
+    assert len(records) >= 40
+    assert all(r.mode in ("artist", "supervisor") for r in records)
+    assert all(r.answer for r in records if r.mode == "artist")
+    assert all(r.source.startswith("https://") for r in records if r.answer)
+    assert {r.split for r in records} == {"dev", "test"}
+    assert all(r.type in ("tv_show", "movie", "videogame", "podcast", "brand") for r in records if r.mode == "supervisor")
+
+
+def test_supervisor_hit_counts_with_an_emerging_answer():
+    resolved = [Resolved("Baby Queen", True, 0.42), Resolved("Famous Star", True, 0.97)]
+    row = score_row("s03", "cue", "supervisor", "Baby Queen", ["Famous Star", "Baby Queen"], resolved, 0.8, 1, 0)
+    assert (row.hit, row.emerging, row.made_up) == (True, 1, 0)

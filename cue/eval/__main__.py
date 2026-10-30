@@ -23,7 +23,7 @@ DETAILS_DIR = Path(".cache/eval")
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="python -m cue.eval", description="Compare Claude alone with Cue on known placements.")
     p.add_argument("--set", dest="set_path", default="evalsets/placements.jsonl")
-    p.add_argument("--split", default="dev", choices=["dev", "test", "all"])
+    p.add_argument("--split", default="all", choices=["dev", "test", "all"])
     p.add_argument("--systems", default="llm,cue", help="comma-separated: llm, cue")
     p.add_argument("--limit", type=int, default=0, help="only the first N rows")
     p.add_argument("--out", default="eval/results.json")
