@@ -304,6 +304,52 @@ function Venues({ artistId }) {
   );
 }
 
+function Collaborators({ artistId }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let live = true;
+    get(`/artists/${artistId}/collaborators`)
+      .then((body) => live && setData(body))
+      .catch((failure) => live && setError(failure.message));
+    return () => {
+      live = false;
+    };
+  }, [artistId]);
+
+  return (
+    <section className="card stack">
+      <div className="stack" style={{ gap: 4 }}>
+        <h3>Artists your fans already love</h3>
+        <p className="muted small">Similar-sized artists with the same fans. Good people to reach out to for a collab, a shared show or a playlist swap. Shared fans don't guarantee a creative fit.</p>
+      </div>
+      {error && <p className="error">{error}</p>}
+      {!data && !error && <p className="muted small">Asking Qloo and checking each artist is still active…</p>}
+      {data && data.artists.length === 0 && <p className="note">Qloo has no similar-sized artists with your fans yet.</p>}
+      {data && data.artists.length > 0 && (
+        <div className="rank-list">
+          {data.artists.map((a, index) => (
+            <div key={a.id} className="rank-row" style={{ gridTemplateColumns: "40px minmax(0, 1fr) 90px auto" }}>
+              <span className="avatar small">{a.image_url ? <img src={a.image_url} alt="" /> : initials(a.name)}</span>
+              <span className="rank-name">
+                {a.name}
+                <small>
+                  popularity {Math.round((a.popularity || 0) * 100)}
+                  {a.status === "unverified" ? " · couldn't confirm they're active" : " · still active"}
+                </small>
+              </span>
+              <span className="rank-bar" title="Fan overlap on Qloo"><span style={{ width: `${Math.round((a.fan_overlap || 0) * 100)}%` }} /></span>
+              {a.spotify_url ? <a className="btn small ghost" href={a.spotify_url} target="_blank" rel="noreferrer">Listen</a> : <span className="muted small">No link</span>}
+            </div>
+          ))}
+          <p className="muted small">The bar is how much of your fanbase they share, on Qloo.</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function FanInsights({ run }) {
   const result = run.summary?.result;
   return (
@@ -461,6 +507,8 @@ function Fans({ artist, run, onStart }) {
           )}
 
           <FanInsights run={run} />
+
+          <Collaborators artistId={artist.profile_id} />
 
           <FanMap artistId={artist.profile_id} />
 

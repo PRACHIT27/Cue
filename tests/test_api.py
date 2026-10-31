@@ -290,3 +290,28 @@ def test_fan_map_returns_points_and_names_the_hottest_areas():
     assert [a["name"] for a in body["top_areas"]] == ["Grand Rapids, MI", "Detroit, MI"]
     sent = next(r for r in fake.requests if r.url.path == "/v2/insights")
     assert sent.url.params["filter.location.query"] == "United States"
+
+
+def test_collaborators_keep_similar_sized_active_artists():
+    me = raw_entity("A-1", "Example Artist", "urn:entity:artist", popularity=0.5)
+    peer = raw_entity("P-2", "Peer Act", "urn:entity:artist", spotify="1" * 22, mbid="mb-peer", popularity=0.55)
+    ended = raw_entity("P-3", "Old Act", "urn:entity:artist", mbid="mb-old", popularity=0.45)
+    star = raw_entity("P-4", "Huge Star", "urn:entity:artist", popularity=0.99)
+    for row, affinity in ((peer, 0.9), (ended, 0.8), (star, 0.95)):
+        row["query"] = {"affinity": affinity}
+    m, _ = manager(
+        {
+            ("/v2/insights", "filter.type", "urn:entity:artist"): {"results": {"entities": [star, peer, ended]}},
+            ("/entities", "entity_ids", "A-1"): {"results": [me]},
+            ("/entities", None, None): {"results": [peer, ended]},
+        }
+    )
+
+    class Spans(FakeMusicBrainz):
+        async def life_span(self, mbid):
+            return SimpleNamespace(ended=mbid == "mb-old")
+
+    body = TestClient(create_app(m, Spans())).get("/artists/A-1/collaborators").json()
+    assert [a["name"] for a in body["artists"]] == ["Peer Act"]
+    assert body["artists"][0]["status"] == "active"
+    assert body["artists"][0]["spotify_url"] == "https://open.spotify.com/artist/" + "1" * 22

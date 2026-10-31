@@ -169,6 +169,54 @@ def create_app(manager: RunManager | None = None, musicbrainz: Any = None) -> Fa
             )
         return {"area": area, "points": points, "top_areas": top_areas(points)}
 
+    @app.get("/artists/{entity_id}/collaborators")
+    async def artist_collaborators(entity_id: str, take: int = 6) -> dict[str, Any]:
+        take = max(1, min(take, 10))
+
+        async def work():
+            me = await get_entities([entity_id])
+            if not me:
+                return None
+            mine = me[0].ref.popularity
+            data = await qloo_get(INSIGHTS, {"filter.type": "urn:entity:artist", "signal.interests.entities": entity_id, "filter.exclude.entities": entity_id, "take": 30})
+            raws = [r for r in (((data or {}).get("results") or {}).get("entities") or []) if r.get("entity_id")]
+            low, high = max(0.05, mine - 0.35), min(1.0, mine + 0.2)
+            peers = [r for r in raws if low <= float(r.get("popularity") or 0) <= high][: take + 4]
+            details = {e.ref.id: e for e in await get_entities([r["entity_id"] for r in peers])}
+            return mine, peers, details
+
+        found = await with_qloo(work)
+        if found is None:
+            raise HTTPException(404, "No Qloo entity with that ID")
+        mine, peers, details = found
+        musicbrainz = app.state.musicbrainz
+        artists = []
+        for raw in peers:
+            if len(artists) == take:
+                break
+            entity = details.get(raw["entity_id"])
+            span = None
+            if entity is not None and entity.musicbrainz_id:
+                try:
+                    span = await musicbrainz.life_span(entity.musicbrainz_id)
+                except Exception:
+                    span = None
+            if span is not None and span.ended:
+                continue
+            artists.append(
+                {
+                    "id": raw["entity_id"],
+                    "name": raw.get("name"),
+                    "popularity": raw.get("popularity"),
+                    "fan_overlap": (raw.get("query") or {}).get("affinity"),
+                    "image_url": entity.image_url if entity else None,
+                    "description": entity.description if entity else None,
+                    "spotify_url": f"https://open.spotify.com/artist/{entity.spotify_id}" if entity and entity.spotify_id else None,
+                    "status": "active" if span is not None else "unverified",
+                }
+            )
+        return {"popularity": mine, "artists": artists}
+
     @app.get("/artists/{entity_id}/venues")
     async def artist_venues(entity_id: str, city: str = "", take: int = 6) -> dict[str, Any]:
         city = city.strip()
