@@ -365,3 +365,5 @@ label.field .input, label.field textarea { font-weight: 400; }
 .stage .hero h1 em { font-family: inherit; font-style: normal; font-weight: inherit; color: var(--ink); }
 .stage .lede { color: var(--muted); }
 .marquee-badge, .stage .marquee-badge { background: var(--artist-soft); color: var(--artist); box-shadow: none; letter-spacing: 0; text-transform: none; font-size: 0.78rem; font-weight: 600; padding: 4px 12px; }
+
+.insight { font-size: 1rem; color: var(--ink); background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; }

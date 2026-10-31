@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import FanMap from "../../components/FanMap";
 import FitRing from "../../components/FitRing";
+import MatchCharts from "../../components/MatchCharts";
 import Poster from "../../components/Poster";
 import RunProgress, { ARTIST_STAGES } from "../../components/RunProgress";
 import Shell, { Steps } from "../../components/Shell";
@@ -487,6 +488,7 @@ function Matches({ run, onPitch, onRetry }) {
               ))}
             </div>
             {result.pitches.length === 0 && <p className="note">Qloo found matches, but no pitches could be written this time.</p>}
+            <MatchCharts result={result} />
             {SECTIONS.map((section) => {
               const items = (result.sections[section.id] || []).filter(keep);
               if (!items.length) return null;
