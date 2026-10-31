@@ -110,8 +110,15 @@ export default function FanMap({ artistId }) {
       {data && data.top_areas.length > 0 && (
         <div className="stack" style={{ gap: 6 }}>
           <strong className="small">Strongest areas</strong>
-          <div className="chips">
-            {data.top_areas.map((a) => <span className="chip" key={a.name}>{a.name}</span>)}
+          <div className="rank-list">
+            {data.top_areas.map((a, index) => (
+              <div className="rank-row" key={a.name}>
+                <span className="rank-num">{index + 1}</span>
+                <span className="rank-name">{a.name}</span>
+                <span className="rank-bar"><span style={{ width: `${Math.round((a.affinity || 0) * 100)}%` }} /></span>
+                <span className="rank-val">{Math.round((a.affinity || 0) * 100)}</span>
+              </div>
+            ))}
           </div>
           <p className="muted small">Named by the nearest big city to each hot spot.</p>
         </div>

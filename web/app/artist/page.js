@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import FanMap from "../../components/FanMap";
 import FitRing from "../../components/FitRing";
 import MatchCharts from "../../components/MatchCharts";
+import { QlooMeters } from "../../components/Meter";
 import Poster from "../../components/Poster";
 import RunProgress, { ARTIST_STAGES } from "../../components/RunProgress";
 import Shell, { Steps } from "../../components/Shell";
@@ -287,13 +288,16 @@ function Venues({ artistId }) {
       </div>
       {error && <p className="error" role="alert">{error}</p>}
       {found && found.venues.length > 0 && (
-        <div className="grid-2">
-          {found.venues.map((v) => (
-            <div key={v.id} className="stack" style={{ gap: 2 }}>
-              <strong>{v.name}</strong>
-              <span className="muted small">{v.address || found.city}</span>
+        <div className="rank-list">
+          {found.venues.map((v, index) => (
+            <div key={v.id} className="rank-row" title={v.address || found.city}>
+              <span className="rank-num">{index + 1}</span>
+              <span className="rank-name">{v.name}<small>{v.address || found.city}</small></span>
+              <span className="rank-bar"><span style={{ width: `${Math.round((v.affinity || 0) * 100)}%` }} /></span>
+              <span className="rank-val">{Math.round((v.affinity || 0) * 100)}</span>
             </div>
           ))}
+          <p className="muted small">The bar is how strongly your fans like each venue on Qloo.</p>
         </div>
       )}
     </form>
@@ -518,7 +522,7 @@ function Matches({ run, onPitch, onRetry }) {
                         <h3>{item.candidate.name} <span className="pill">{typeLabel(item.candidate.type)}</span>{BASIS_LABELS[item.fit.inputs?.basis] && <span className="pill warn" title="Qloo shows no taste lean toward your music here; only the audience's age and gender line up">{BASIS_LABELS[item.fit.inputs.basis]}</span>}</h3>
                         <p>{item.reason}</p>
                         <Tags inputs={item.fit.inputs} />
-                        <QlooFacts inputs={item.fit.inputs} popularity={item.candidate.popularity} />
+                        <QlooMeters inputs={item.fit.inputs} popularity={item.candidate.popularity} />
                       </div>
                       <div className="match-side">
                         <FitRing value={item.fit.value} />
@@ -541,24 +545,6 @@ function Matches({ run, onPitch, onRetry }) {
 
 const BASIS_LABELS = { audience_only: "Audience match only", weak: "Weak match" };
 
-function liftPoints(lift) {
-  return typeof lift === "number" ? Math.round(lift * 1000) / 10 : null;
-}
-
-function QlooFacts({ inputs, popularity }) {
-  const lift = liftPoints(inputs?.lift);
-  const facts = [];
-  if (typeof popularity === "number") facts.push(`Qloo popularity ${Math.round(popularity * 100)}/100`);
-  if (lift != null && lift > 0) facts.push(`+${lift} vs fans of similar artists`);
-  if (typeof inputs?.audience === "number") facts.push(`Audience match ${Math.round(inputs.audience * 100)}%`);
-  if (!facts.length) return null;
-  return (
-    <div className="tags" aria-label="Qloo numbers">
-      {facts.map((f) => <span className="tag" key={f} style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{f}</span>)}
-    </div>
-  );
-}
-
 function AlsoLove({ groups, keep }) {
   const entries = Object.entries(groups || {})
     .map(([type, rows]) => [type, rows.filter(keep)])
@@ -568,18 +554,22 @@ function AlsoLove({ groups, keep }) {
     <section className="card stack">
       <div className="stack" style={{ gap: 4 }}>
         <h3>More your fans love</h3>
-        <p className="muted small">Other productions Qloo scored for your fans, beyond the picks above. Worth a look when you plan more pitches.</p>
+        <p className="muted small">Other productions Qloo scored for your fans, beyond the picks above. The bar is Cue's fit score; the small number is popularity on Qloo.</p>
       </div>
       <div className="grid-2">
         {entries.map(([type, rows]) => (
-          <div key={type} className="stack" style={{ gap: 6 }}>
+          <div key={type} className="stack" style={{ gap: 8 }}>
             <strong>{typeLabel(type)}</strong>
-            {rows.map((row) => (
-              <div key={row.id} className="between small" style={{ gap: 8 }}>
-                <span>{row.name}</span>
-                <span className="muted" style={{ whiteSpace: "nowrap" }}>pop {Math.round(row.popularity * 100)} · fit {Math.round(row.fit * 100)}</span>
-              </div>
-            ))}
+            <div className="rank-list">
+              {rows.map((row, index) => (
+                <div key={row.id} className="rank-row" title={`Popularity ${Math.round(row.popularity * 100)} · fit ${Math.round(row.fit * 100)}`}>
+                  <span className="rank-num">{index + 1}</span>
+                  <span className="rank-name">{row.name}<small>popularity {Math.round(row.popularity * 100)}</small></span>
+                  <span className="rank-bar"><span style={{ width: `${Math.round(row.fit * 100)}%` }} /></span>
+                  <span className="rank-val">{Math.round(row.fit * 100)}</span>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
@@ -630,11 +620,9 @@ function Pitch({ item, artist, onBack }) {
           <ul className="small">
             <li>{item.reason}</li>
             {section && <li>{section.title}: {section.hint.toLowerCase()}</li>}
-            {typeof inputs.audience === "number" && <li>Audience age and gender match: {Math.round(inputs.audience * 100)}%</li>}
-            {liftPoints(inputs.lift) > 0 && <li>Your fans like it {liftPoints(inputs.lift)} points more than fans of similar artists, on Qloo's 0–100 affinity scale</li>}
-            {typeof item.candidate.popularity === "number" && <li>Popularity on Qloo: {Math.round(item.candidate.popularity * 100)}/100</li>}
             {BASIS_LABELS[inputs.basis] && <li>{BASIS_LABELS[inputs.basis]}: Qloo shows no taste lean toward your music here</li>}
           </ul>
+          <QlooMeters inputs={inputs} popularity={item.candidate.popularity} />
         </aside>
         <div className="card stack">
           <div className="between"><h3>Your pitch</h3><span className="pill">Draft · edit anything</span></div>
