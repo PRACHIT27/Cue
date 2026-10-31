@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import FanMap from "../../components/FanMap";
 import FitRing from "../../components/FitRing";
 import MatchCharts from "../../components/MatchCharts";
@@ -300,7 +300,22 @@ function Venues({ artistId }) {
   );
 }
 
-function Fans({ artist, onStart }) {
+function FanInsights({ run }) {
+  const result = run.summary?.result;
+  return (
+    <section className="stack">
+      <div className="stack" style={{ gap: 4 }}>
+        <h3>What Qloo learned about your fans</h3>
+        <p className="muted small">Cue scores shows, films, games, podcasts and brands for your fans as soon as you're confirmed.</p>
+      </div>
+      {run.status === "running" && <div className="card loading"><span className="spinner" /><strong>Scoring productions for your fans…</strong><span className="muted small">About 30 seconds. The charts appear here when it's done.</span></div>}
+      {run.status === "error" && <p className="card error">{run.error}</p>}
+      {result && <MatchCharts result={result} />}
+    </section>
+  );
+}
+
+function Fans({ artist, run, onStart }) {
   const [profile, setProfile] = useState(null);
   const [similar, setSimilar] = useState(null);
   const [error, setError] = useState("");
@@ -441,6 +456,8 @@ function Fans({ artist, onStart }) {
             </div>
           )}
 
+          <FanInsights run={run} />
+
           <FanMap artistId={artist.profile_id} />
 
           <Venues artistId={artist.profile_id} />
@@ -488,7 +505,6 @@ function Matches({ run, onPitch, onRetry }) {
               ))}
             </div>
             {result.pitches.length === 0 && <p className="note">Qloo found matches, but no pitches could be written this time.</p>}
-            <MatchCharts result={result} />
             {SECTIONS.map((section) => {
               const items = (result.sections[section.id] || []).filter(keep);
               if (!items.length) return null;
@@ -666,10 +682,21 @@ export default function ArtistPage() {
     }
   }, []);
 
-  const startRun = (text) => {
+  const ranFor = useRef(null);
+  const launch = (text) => {
     setBrief(text);
-    setStep("matches");
+    ranFor.current = artist.profile_id;
     run.start({ mode: "artist", signal_ids: artist.signal_ids, artist_name: artist.name, basis: artist.basis, route: artist.route, brief: text });
+  };
+
+  useEffect(() => {
+    if (step === "fans" && artist && ranFor.current !== artist.profile_id) launch("");
+  }, [step, artist]);
+
+  const startRun = (text) => {
+    setStep("matches");
+    if (text === brief && ranFor.current === artist.profile_id && run.status !== "error") return;
+    launch(text);
   };
 
   const stepIndex = { trying: 0, connect: 0, confirm: 1, fans: 2, matches: 2, pitch: 2 }[step];
@@ -682,6 +709,7 @@ export default function ArtistPage() {
             className="linkish small"
             onClick={() => {
               writeSaved(null);
+              ranFor.current = null;
               setArtist(null);
               setFound(null);
               setStep("connect");
@@ -720,7 +748,7 @@ export default function ArtistPage() {
           }}
         />
       )}
-      {step === "fans" && artist && <Fans artist={artist} onStart={startRun} />}
+      {step === "fans" && artist && <Fans artist={artist} run={run} onStart={startRun} />}
       {step === "matches" && artist && <Matches run={run} onPitch={(item) => { setPitch(item); setStep("pitch"); }} onRetry={() => startRun(brief)} />}
       {step === "pitch" && pitch && <Pitch item={pitch} artist={artist} onBack={() => setStep("matches")} />}
     </Shell>
