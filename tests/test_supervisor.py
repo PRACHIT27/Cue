@@ -32,7 +32,7 @@ def fake_tools(artists, wide=None, ended=(), no_mbid=(), ended_by_name=()):
         calls.append("similar")
         return [EntityRef("SHOW-2", "Other Show", "urn:entity:tv_show", 0.9), EntityRef("SHOW-3", "Third Show", "urn:entity:tv_show", 0.9)]
 
-    async def lesser_known_artists(signal_ids, cap):
+    async def lesser_known_artists(signal_ids, cap, audiences=None):
         calls.append(("artists", cap))
         pool = artists if cap == UNDER_RADAR_CAP else (wide or artists)
         return result([InsightsItem(a, aff, n, {}) for n, (a, aff) in enumerate(pool, 1) if a.popularity <= cap + 0.5])

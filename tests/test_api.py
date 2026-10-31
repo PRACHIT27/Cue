@@ -204,15 +204,16 @@ def test_artist_run_streams_events_and_returns_sections():
 
 
 def test_supervisor_run_returns_the_under_the_radar_label():
-    async def run(production_id, production_name, production_type, events, brief=""):
+    async def run(production_id, production_name, production_type, events, brief="", audiences=None):
         assert production_type == "urn:entity:tv_show"
+        assert audiences == ["urn:audience:hobbies_and_interests:video_gamer"]
         ref = EntityRef("A-2", "Quiet Artist", "urn:entity:artist", 0.5)
         item = BriefItem(ref, FitScore("S-1:A-2", 0.8, "ok", {"life_span": "unverified", "spotify_url": None}), "Their fans like it.")
         return SimpleNamespace(brief=Brief(events.run_id, production_id, (item,)), matches=(), drops=(), cap=0.8)
 
     m, _ = manager(supervisor=run)
     with TestClient(create_app(m, FakeMusicBrainz())) as client:
-        run_id = client.post("/runs", json={"mode": "supervisor", "production_id": "S-1", "production_name": "Example Show"}).json()["run_id"]
+        run_id = client.post("/runs", json={"mode": "supervisor", "production_id": "S-1", "production_name": "Example Show", "audiences": ["urn:audience:hobbies_and_interests:video_gamer"]}).json()["run_id"]
         done = wait_for(client, run_id)
     assert done["status"] == "done"
     assert done["result"]["label"] == "Under-the-radar artists"
@@ -274,6 +275,21 @@ def test_venues_need_a_city_and_ask_qloo_for_live_music_places():
     sent = next(r for r in fake.requests if r.url.path == "/v2/insights")
     assert sent.url.params["filter.location.query"] == "Detroit"
     assert sent.url.params["filter.tags"] == "urn:tag:genre:place:live_music_venue"
+
+
+def test_audiences_are_grouped_by_type_and_keep_only_urn_ids():
+    kinds = {"results": {"audience_types": [{"type": "urn:audience:life_stage"}]}}
+    page = {"results": {"audiences": [
+        {"entity_id": "U-1", "id": "urn:audience:life_stage:new_parents", "name": "New Parents"},
+        {"entity_id": "U-2", "id": "U-2", "name": "No Urn"},
+    ]}}
+    m, fake = manager({("/v2/audiences/types", None, None): kinds, ("/v2/audiences", "filter.parents.types", "urn:audience:life_stage"): page})
+    client = TestClient(create_app(m, FakeMusicBrainz()))
+    body = client.get("/audiences").json()
+    assert body["groups"] == [{"type": "urn:audience:life_stage", "label": "Life stage", "audiences": [{"id": "urn:audience:life_stage:new_parents", "name": "New Parents"}]}]
+    asked = len(fake.requests)
+    client.get("/audiences")
+    assert len(fake.requests) == asked
 
 
 def test_fan_map_returns_points_and_names_the_hottest_areas():

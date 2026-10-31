@@ -42,8 +42,9 @@ async def similar_productions(production_type: str, production_id: str) -> list[
     return [i.candidate for i in result.items if i.candidate.id != production_id][:GROUP_SIZE]
 
 
-async def lesser_known_artists(signal_ids: list[str], cap: float) -> InsightsResult:
-    return await insights(InsightsRequest(ARTIST, tuple(signal_ids), popularity_max=cap, take=ARTIST_TAKE))
+async def lesser_known_artists(signal_ids: list[str], cap: float, audiences: list[str] | None = None) -> InsightsResult:
+    filters = {"signal.demographics.audiences": ",".join(audiences)} if audiences else {}
+    return await insights(InsightsRequest(ARTIST, tuple(signal_ids), popularity_max=cap, take=ARTIST_TAKE, filters=filters))
 
 
 async def artists_group(group_ids: list[str], candidates: InsightsResult) -> InsightsResult:
@@ -143,6 +144,7 @@ async def run_supervisor(
     production_type: str,
     events: RunEvents,
     brief: str = "",
+    audiences: list[str] | None = None,
     llm: LLMCall = structured,
     tools: Mapping[str, Callable[..., Awaitable[Any]]] = SUPERVISOR_TOOLS,
 ) -> SupervisorRun:
@@ -150,7 +152,7 @@ async def run_supervisor(
         (
             PlannedCall("profile", "demographics", {"ids": [production_id]}),
             PlannedCall("similar", "similar_productions", {"production_type": production_type, "production_id": production_id}),
-            PlannedCall("artists", "lesser_known_artists", {"signal_ids": [production_id], "cap": UNDER_RADAR_CAP}),
+            PlannedCall("artists", "lesser_known_artists", {"signal_ids": [production_id], "cap": UNDER_RADAR_CAP, "audiences": list(audiences or [])}),
         )
     )
     results = await execute(plan, tools, events)
@@ -165,7 +167,7 @@ async def run_supervisor(
             status="ok",
             note=f"Only {len(found.items) if found else 0} under-the-radar artists below popularity {UNDER_RADAR_CAP:.2f}; widened the cap to {WIDENED_CAP:.2f}.",
         )
-        widened = await execute(Plan((PlannedCall("artists_wide", "lesser_known_artists", {"signal_ids": [production_id], "cap": WIDENED_CAP}),)), tools, events)
+        widened = await execute(Plan((PlannedCall("artists_wide", "lesser_known_artists", {"signal_ids": [production_id], "cap": WIDENED_CAP, "audiences": list(audiences or [])}),)), tools, events)
         found = _ok(widened, "artists_wide") or found
 
     items: list[InsightsItem] = [i for i in (found.items if found else ()) if i.candidate.popularity <= cap]

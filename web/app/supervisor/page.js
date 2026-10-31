@@ -56,6 +56,8 @@ function Brief({ role, preset, onFind }) {
   const [project, setProject] = useState("");
   const [query, setQuery] = useState(preset?.query || "");
   const [vibes, setVibes] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [audiences, setAudiences] = useState([]);
   const [candidates, setCandidates] = useState(null);
   const [picked, setPicked] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -79,6 +81,10 @@ function Brief({ role, preset, onFind }) {
   };
 
   useEffect(() => {
+    get("/audiences").then((d) => setGroups(d.groups || [])).catch(() => setGroups([]));
+  }, []);
+
+  useEffect(() => {
     if (preset?.query) lookUp(preset.query);
   }, []);
 
@@ -88,7 +94,7 @@ function Brief({ role, preset, onFind }) {
     const parts = [];
     if (project.trim()) parts.push(`for ${project.trim()}`);
     if (vibes.length) parts.push(`vibe: ${vibes.join(", ").toLowerCase()}`);
-    onFind({ production: picked, type, project: project.trim(), vibes, brief: parts.join("; ") });
+    onFind({ production: picked, type, project: project.trim(), vibes, audiences, brief: parts.join("; ") });
   };
 
   return (
@@ -128,6 +134,25 @@ function Brief({ role, preset, onFind }) {
             ))}
           </div>
         </div>
+        {groups.length > 0 && (
+          <div className="stack">
+            <label className="field" htmlFor="viewers">Your viewers are <span className="muted small">optional, up to 2 Qloo audiences</span></label>
+            <select id="viewers" className="input" value="" disabled={audiences.length >= 2} onChange={(e) => { const a = groups.flatMap((g) => g.audiences).find((x) => x.id === e.target.value); if (a && !audiences.some((x) => x.id === a.id)) setAudiences([...audiences, a]); }}>
+              <option value="">{audiences.length >= 2 ? "Two picked" : "Pick an audience…"}</option>
+              {groups.map((g) => (
+                <optgroup key={g.type} label={g.label}>
+                  {g.audiences.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            {audiences.length > 0 && (
+              <div className="chips">
+                {audiences.map((a) => <button type="button" key={a.id} className="chip" aria-pressed="true" onClick={() => setAudiences(audiences.filter((x) => x.id !== a.id))}>{a.name} ×</button>)}
+              </div>
+            )}
+            <p className="muted small">Cue asks Qloo to lean the artist search toward what this group likes.</p>
+          </div>
+        )}
         <p className="note">Under-the-radar artists only: big names are left out, and artists who have died or disbanded are dropped. Lesser-known doesn't always mean new.</p>
         {error && <p className="error" role="alert">{error}</p>}
         <button className="btn block">Find artists →</button>
@@ -153,6 +178,7 @@ function Shortlist({ search, run }) {
           <div className="chips">
             <span className="chip">Audience like {search.production.name}</span>
             {search.vibes.length > 0 && <span className="chip">{search.vibes.join(" · ")}</span>}
+            {search.audiences?.length > 0 && <span className="chip">Viewers: {search.audiences.map((a) => a.name).join(", ")}</span>}
             <span className="chip" style={{ color: "var(--accent)" }}>Under-the-radar only</span>
           </div>
         </div>
@@ -236,7 +262,7 @@ export default function SupervisorPage() {
           onFind={(s) => {
             setSearch(s);
             setStep("shortlist");
-            run.start({ mode: "supervisor", production_id: s.production.id, production_name: s.production.name, production_type: s.type, brief: s.brief });
+            run.start({ mode: "supervisor", production_id: s.production.id, production_name: s.production.name, production_type: s.type, brief: s.brief, audiences: (s.audiences || []).map((a) => a.id) });
           }}
         />
       )}

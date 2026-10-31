@@ -163,6 +163,7 @@ class RunManager:
                                 request["production_type"],
                                 events,
                                 brief=request.get("brief", ""),
+                                audiences=list(request.get("audiences") or []),
                             )
                             state.result = supervisor_result(run)
             status = "done"

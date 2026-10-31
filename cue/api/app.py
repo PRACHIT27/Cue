@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
@@ -20,7 +21,7 @@ from cue.qloo.cache import InMemoryCache
 from cue.qloo.ratelimit import TokenBucket
 from cue.qloo.settings import QlooSettings
 from cue.qloo.smoke import _load_dotenv
-from cue.qloo.params import INSIGHTS
+from cue.qloo.params import AUDIENCE_TYPES, AUDIENCES, INSIGHTS
 from cue.tools import find_entity, get_entities, insights, use_client
 from cue.tools.context import qloo_get
 from cue.tools.records import InsightsRequest
@@ -60,6 +61,7 @@ class RunRequest(BaseModel):
     production_id: str = ""
     production_name: str = ""
     production_type: Literal["tv_show", "movie", "videogame", "podcast", "brand"] = "tv_show"
+    audiences: list[str] = Field(default_factory=list, max_length=3)
 
     @model_validator(mode="after")
     def check_mode(self) -> RunRequest:
@@ -251,6 +253,34 @@ def create_app(manager: RunManager | None = None, musicbrainz: Any = None) -> Fa
     async def production_search(body: ProductionLookup) -> dict[str, Any]:
         refs = await with_qloo(lambda: find_entity(body.name, [f"urn:entity:{body.type}"]))
         return {"candidates": jsonable(refs)}
+
+    @app.get("/audiences")
+    async def audiences() -> dict[str, Any]:
+        saved = getattr(app.state, "audiences", None)
+        if saved:
+            return saved
+
+        async def load() -> list[dict[str, Any]]:
+            kinds = await qloo_get(AUDIENCE_TYPES, {"take": 50})
+            type_ids = [t.get("type") or t.get("id") for t in ((kinds or {}).get("results") or {}).get("audience_types") or []]
+            pages = await asyncio.gather(*(qloo_get(AUDIENCES, {"filter.parents.types": t, "take": 50}) for t in type_ids if t), return_exceptions=True)
+            groups = []
+            for kind, page in zip([t for t in type_ids if t], pages):
+                if isinstance(page, Exception):
+                    continue
+                rows = [{"id": a["id"], "name": a.get("name")} for a in ((page or {}).get("results") or {}).get("audiences") or [] if str(a.get("id", "")).startswith("urn:audience:")]
+                if rows:
+                    groups.append({"type": kind, "label": kind.rsplit(":", 1)[-1].replace("_", " ").capitalize(), "audiences": sorted(rows, key=lambda r: r["name"] or "")})
+            return groups
+
+        try:
+            groups = await with_qloo(load)
+        except Exception as failure:
+            raise HTTPException(502, f"Qloo couldn't list audiences: {failure}")
+        result = {"groups": groups}
+        if groups:
+            app.state.audiences = result
+        return result
 
     @app.post("/runs", status_code=202)
     async def start_run(body: RunRequest) -> dict[str, Any]:
