@@ -1,0 +1,11 @@
+.git
+.env
+.env.*
+.cache
+web
+tests
+evalsets
+notion
+*.md
+__pycache__
+.pytest_cache
