@@ -274,3 +274,19 @@ def test_venues_need_a_city_and_ask_qloo_for_live_music_places():
     sent = next(r for r in fake.requests if r.url.path == "/v2/insights")
     assert sent.url.params["filter.location.query"] == "Detroit"
     assert sent.url.params["filter.tags"] == "urn:tag:genre:place:live_music_venue"
+
+
+def test_fan_map_returns_points_and_names_the_hottest_areas():
+    squares = [
+        {"location": {"latitude": 42.98, "longitude": -85.61}, "query": {"affinity": 1.0, "popularity": 0.9}},
+        {"location": {"latitude": 42.3, "longitude": -83.1}, "query": {"affinity": 0.8, "popularity": 0.7}},
+        {"location": {"latitude": 10.0, "longitude": -150.0}, "query": {"affinity": 0.9, "popularity": 0.1}},
+        {"location": {"latitude": 30.0, "longitude": -90.0}, "query": {"affinity": 0}},
+    ]
+    m, fake = manager({("/v2/insights", "filter.type", "urn:heatmap"): {"results": {"heatmap": squares}}})
+    body = TestClient(create_app(m, FakeMusicBrainz())).get("/artists/A-1/map").json()
+    assert body["area"] == "United States"
+    assert len(body["points"]) == 3
+    assert [a["name"] for a in body["top_areas"]] == ["Grand Rapids, MI", "Detroit, MI"]
+    sent = next(r for r in fake.requests if r.url.path == "/v2/insights")
+    assert sent.url.params["filter.location.query"] == "United States"

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import FanMap from "../../components/FanMap";
 import FitRing from "../../components/FitRing";
 import Poster from "../../components/Poster";
 import RunProgress, { ARTIST_STAGES } from "../../components/RunProgress";
@@ -438,6 +439,8 @@ function Fans({ artist, onStart }) {
               </div>
             </div>
           )}
+
+          <FanMap artistId={artist.profile_id} />
 
           <Venues artistId={artist.profile_id} />
 

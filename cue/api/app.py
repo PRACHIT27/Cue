@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from cue.agents.planner.agent import similar_artists
 from cue.api import onboarding
+from cue.api.places import top_areas
 from cue.api.runs import RunManager
 from cue.api.serialize import jsonable
 from cue.identity.musicbrainz import shared_client
@@ -144,6 +145,29 @@ def create_app(manager: RunManager | None = None, musicbrainz: Any = None) -> Fa
         by_id = {r.ref.id: r for r in records}
         found = [by_id[i] for i in ids if i in by_id]
         return {"artists": [{"id": r.ref.id, "name": r.ref.name, "image_url": r.image_url, "popularity": r.ref.popularity} for r in found]}
+
+    @app.get("/artists/{entity_id}/map")
+    async def artist_map(entity_id: str, area: str = "United States") -> dict[str, Any]:
+        area = area.strip() or "United States"
+        params = {"filter.type": "urn:heatmap", "signal.interests.entities": entity_id, "filter.location.query": area}
+        try:
+            data = await with_qloo(lambda: qloo_get(INSIGHTS, params))
+        except Exception as failure:
+            raise HTTPException(502, f"Qloo couldn't map fans for {area!r}: {failure}")
+        points = []
+        for raw in ((data or {}).get("results") or {}).get("heatmap") or []:
+            location, query = raw.get("location") or {}, raw.get("query") or {}
+            if location.get("latitude") is None or location.get("longitude") is None or not query.get("affinity"):
+                continue
+            points.append(
+                {
+                    "lat": float(location["latitude"]),
+                    "lon": float(location["longitude"]),
+                    "affinity": float(query["affinity"]),
+                    "popularity": query.get("popularity"),
+                }
+            )
+        return {"area": area, "points": points, "top_areas": top_areas(points)}
 
     @app.get("/artists/{entity_id}/venues")
     async def artist_venues(entity_id: str, city: str = "", take: int = 6) -> dict[str, Any]:
