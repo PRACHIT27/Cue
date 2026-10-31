@@ -52,54 +52,53 @@ function TypeLean({ data }) {
   );
 }
 
+const BOXES = [
+  { id: "first", icon: "🎯", title: "Pitch first", hint: "Smaller productions your fans love. Your best odds.", tone: "var(--good)", soft: "var(--good-soft)" },
+  { id: "dream", icon: "🚀", title: "Dream pitches", hint: "Big productions your fans love. Harder to land, worth a try.", tone: "var(--accent)", soft: "var(--accent-soft)" },
+  { id: "easy", icon: "🌱", title: "Easy wins", hint: "Smaller and easier to reach, but your fans are less keen.", tone: "#9a5b06", soft: "var(--warn-soft)" },
+  { id: "skip", icon: "⏸", title: "Skip for now", hint: "Big and your fans are less keen. Leave these for later.", tone: "var(--muted)", soft: "#f1f0f5" },
+];
+
 function SweetSpot({ data }) {
   if (data.length < 3) return null;
-  const W = 760, H = 340, L = 44, R = 16, T = 14, B = 40;
-  const maxLift = Math.max(...data.map((d) => d.lift), 0.001);
-  const minLift = Math.min(0, ...data.map((d) => d.lift));
   const pops = data.map((d) => d.popularity).sort((a, b) => a - b);
-  const lo = Math.max(0, Math.floor((pops[0] - 0.05) * 20) / 20);
-  const split = pops[Math.floor(pops.length / 2)];
-  const x = (p) => L + ((p - lo) / (1 - lo || 1)) * (W - L - R);
-  const y = (l) => T + (1 - (l - minLift) / (maxLift - minLift || 1)) * (H - T - B);
-  const midX = x(split);
-  const midY = y(minLift + (maxLift - minLift) / 2);
-  const sweet = data
-    .filter((d) => d.popularity < split && d.lift >= minLift + (maxLift - minLift) / 2)
-    .sort((a, b) => b.lift - a.lift)
-    .slice(0, 4);
-  const types = [...new Set(data.map((d) => d.type))];
+  const lifts = data.map((d) => d.lift).sort((a, b) => a - b);
+  const bigFrom = pops[Math.floor(pops.length / 2)];
+  const loveFrom = lifts[Math.floor(lifts.length / 2)];
+  const groups = { first: [], dream: [], easy: [], skip: [] };
+  data.forEach((d) => {
+    const big = d.popularity >= bigFrom;
+    const loved = d.lift >= loveFrom;
+    groups[loved ? (big ? "dream" : "first") : big ? "skip" : "easy"].push(d);
+  });
+  Object.values(groups).forEach((g) => g.sort((a, b) => b.lift - a.lift));
   return (
     <div className="card stack">
       <div className="stack" style={{ gap: 4 }}>
-        <h3>Your sweet spot</h3>
-        <p className="muted small">Every match Qloo scored. Further left is smaller and easier to reach; higher means your fans like it more than fans of similar artists.</p>
+        <h3>Where to pitch first</h3>
+        <p className="muted small">Every match Qloo scored for you, sorted by two questions: how much do your fans love it, and how easy is it to reach?</p>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Scatter of matches by Qloo popularity and how much more your fans like them">
-        <rect x={L} y={T} width={midX - L} height={midY - T} fill="var(--accent-soft)" rx="6" />
-        <text x={L + 8} y={T + 18} fontSize="13" fill="var(--accent)" fontWeight="600">Sweet spot: smaller, and your fans love it</text>
-        <line x1={L} y1={H - B} x2={W - R} y2={H - B} stroke="var(--line)" />
-        <line x1={L} y1={T} x2={L} y2={H - B} stroke="var(--line)" />
-        {[lo, (lo + 1) / 2, 1].map((p) => (
-          <text key={p} x={x(p)} y={H - B + 16} fontSize="11" textAnchor="middle" fill="var(--muted)">{Math.round(p * 100)}</text>
+      <div className="sweet-grid">
+        {BOXES.map((box) => (
+          <div key={box.id} className="sweet-box" style={{ background: box.soft, borderColor: box.tone }}>
+            <div className="between" style={{ gap: 8 }}>
+              <strong style={{ color: box.tone }}><span aria-hidden="true">{box.icon}</span> {box.title}</strong>
+              <span className="pill plain">{groups[box.id].length}</span>
+            </div>
+            <span className="muted small">{box.hint}</span>
+            <ul className="sweet-list">
+              {groups[box.id].slice(0, 4).map((d) => (
+                <li key={`${d.id}-${d.pitched}`}>
+                  <span className="sweet-dot" style={{ background: TYPE_COLORS[d.type] || "var(--accent)" }} />
+                  <span className="rank-name">{d.name}</span>
+                  <span className="muted small">{typeLabel(d.type)}</span>
+                </li>
+              ))}
+              {groups[box.id].length === 0 && <li className="muted small">Nothing here</li>}
+            </ul>
+          </div>
         ))}
-        <text x={(L + W - R) / 2} y={H - 4} fontSize="11" textAnchor="middle" fill="var(--muted)">Qloo popularity (0 to 100)</text>
-        <text x={12} y={(T + H - B) / 2} fontSize="11" textAnchor="middle" fill="var(--muted)" transform={`rotate(-90 12 ${(T + H - B) / 2})`}>Fans prefer it more</text>
-        {data.map((d) => (
-          <circle key={`${d.id}-${d.pitched}`} cx={x(d.popularity)} cy={y(d.lift)} r={d.pitched ? 7 : 4.5} fill={TYPE_COLORS[d.type] || "var(--accent)"} fillOpacity={d.pitched ? 0.95 : 0.55} stroke="#fff" strokeWidth="1">
-            <title>{`${d.name} · ${typeLabel(d.type)} · popularity ${Math.round(d.popularity * 100)} · +${Math.round(d.lift * 1000) / 10}`}</title>
-          </circle>
-        ))}
-      </svg>
-      <div className="chips small">
-        {types.map((t) => (
-          <span key={t} className="row" style={{ gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 99, background: TYPE_COLORS[t] || "var(--accent)", display: "inline-block" }} />{typeLabel(t)}</span>
-        ))}
-        <span className="muted">Big dots are your picks</span>
       </div>
-      {sweet.length > 0 && (
-        <p className="insight">Pitch first: {sweet.map((s, i) => <span key={s.id}>{i > 0 && ", "}<strong>{s.name}</strong></span>)}.</p>
-      )}
     </div>
   );
 }
